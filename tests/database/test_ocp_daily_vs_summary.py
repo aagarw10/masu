@@ -63,6 +63,7 @@ class OCPDailySummaryTest(MasuTestCase):
         data = self.accessor._cursor.fetchall()
         return data
 
+    # Returns earliest and latest date of reporting data 
     def get_time_interval(self):
         asc_data = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None, "usage_start ASC")
         desc_data = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None, "usage_start DESC")
@@ -70,11 +71,12 @@ class OCPDailySummaryTest(MasuTestCase):
         end_interval = desc_data[0][0].date()
         return start_interval, end_interval
 
+    # Used to iterate through range of dates
     def date_range(self, start_date, end_date):
         for n in range(int((end_date - start_date).days)):
             yield start_date + timedelta(n)
 
-    # Datetime format util function
+    # Datetime format util function - returns datetime
     def get_datetime(self, date_val):
         start = "\'" + str(date_val) + " 00:00:00+00\'"
         end = "\'" + str(date_val) + " 23:59:59+00\'"
