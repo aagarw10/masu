@@ -40,9 +40,6 @@ class OCPDailySummaryTest(MasuTestCase):
             self._schema, self.column_map
         )
         self.report_schema = self.accessor.report_schema
-        # self._pg2_conn = psycopg2.connect(Config.SQLALCHEMY_DATABASE_URI)
-        # self._cursor = self._pg2_conn.cursor()
-        # self._cursor.execute(f'SET search_path TO {self._schema}')
         print("Connection is successful!")
 
     # Close connection with PostgreSQL and SQLAlchemy
