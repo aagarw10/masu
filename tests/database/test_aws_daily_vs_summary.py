@@ -62,6 +62,7 @@ class AWSDailySummaryTest(MasuTestCase):
         data = self.accessor._cursor.fetchall()
         return data
 
+    # Returns earliest and latest date of reporting data 
     def get_time_interval(self):
         asc_data = self.table_select(AWS_CUR_TABLE_MAP['line_item_daily'], "usage_start", None, "usage_start ASC")
         desc_data = self.table_select(AWS_CUR_TABLE_MAP['line_item_daily'], "usage_start", None, "usage_start DESC")
@@ -69,11 +70,12 @@ class AWSDailySummaryTest(MasuTestCase):
         end_interval = desc_data[0][0].date()
         return start_interval, end_interval
 
+    # Used to iterate through range of dates
     def date_range(self, start_date, end_date):
         for n in range(int((end_date - start_date).days)):
             yield start_date + timedelta(n)
 
-    # Datetime format util function
+    # Datetime format util function - returns datetime
     def get_datetime(self, date_val):
         start = "\'" + str(date_val) + " 00:00:00+00\'"
         end = "\'" + str(date_val) + " 23:59:59+00\'"
@@ -177,6 +179,8 @@ class AWSDailySummaryTest(MasuTestCase):
     # Assert daily and daily_summary values are correct based on DB accessor queries using SQLAlchemy
     def test_comparison_db_accessor(self):
         start_interval, end_interval = (self.get_time_interval())
+        
+        # Iterate through date interval of 
         for date_val in self.date_range(start_interval, end_interval):
             print("Date: " + str(date_val))
             daily_values = self.get_aws_daily_db_accessor(AWS_CUR_TABLE_MAP['line_item_daily'], ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
