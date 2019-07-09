@@ -24,7 +24,7 @@ from masu.database.reporting_common_db_accessor import ReportingCommonDBAccessor
 from tests import MasuTestCase
 
 
-class OCPDailySummaryTest(MasuTestCase):
+class OCPDailyTest(MasuTestCase):
     """Test Cases for the OCP Daily and Daily_Summary database tables."""
 
     # Select schema and open connection with PostgreSQL and SQLAlchemy
@@ -49,6 +49,9 @@ class OCPDailySummaryTest(MasuTestCase):
         self.accessor.close_connections()
         self.accessor.close_session()
         print("Connection is closed")
+
+    def get_today_date(self):
+        return datetime.datetime.now().replace(microsecond=0, second=0, minute=0)
 
     # Helper raw SQL function to select column data from table with optional query values of row and order by
     def table_select(self, table_name, columns=None, rows=None, order_by=None):
@@ -103,129 +106,124 @@ class OCPDailySummaryTest(MasuTestCase):
         query_by_date = query.filter_by(usage_start=usage_start)
         return query_by_date
 
-    # Assert daily and daily_summary values are correct based on DB accessor queries using SQLAlchemy
+    # Main test function
+    # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
     def test_comparison_db_accessor(self):
         # database test between raw and daily reporting tables
         count = self.table_select(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
+        report_items = self.get_ocp_line_item(
+            OCP_REPORT_TABLE_MAP['report'],
+            ["interval_start"])
+        report_period_items = self.get_ocp_line_item(
+            OCP_REPORT_TABLE_MAP['report_period'],
+            ["cluster_id", "report_period_start", "report_period_end"])
         line_items = self.get_ocp_line_item(
-            OCP_REPORT_TABLE_MAP['line_item'],
-            ["cost_entry_bill_id", "cost_entry_product_id", "cost_entry_pricing_id", "cost_entry_reservation_id",
-             "resource_id", "line_item_type", "usage_account_id", "usage_type", "availability_zone",
-             "tax_type", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
-             "blended_cost",
-             "public_on_demand_cost", "public_on_demand_rate", "usage_start"])
-        list_dict = [{"cost_entry_bill_id": line_items[0][0], "cost_entry_product_id": line_items[0][1],
-                      "cost_entry_pricing_id": line_items[0][2],
-                      "cost_entry_reservation_id": line_items[0][3],
-                      "resource_id": line_items[0][4], "line_item_type": line_items[0][5],
-                      "usage_account_id": line_items[0][6],
-                      "usage_type": line_items[0][7], "availability_zone": line_items[0][8],
-                      "tax_type": line_items[0][9], "product_code": line_items[0][10],
-                      "usage_amount": line_items[0][11],
-                      "unblended_rate": line_items[0][12], "unblended_cost": line_items[0][13],
-                      "blended_rate": line_items[0][14],
-                      "blended_cost": line_items[0][15], "public_on_demand_cost": line_items[0][16],
-                      "public_on_demand_rate": line_items[0][17],
-                      "usage_start": line_items[0][18]}]
+            OCP_REPORT_TABLE_MAP['storage_line_item'],
+            ["namespace", "pod", "persistentvolumeclaim", "persistentvolume",
+             "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
+             "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
+             "persistentvolume_labels", "persistentvolumeclaim_labels"])
+        list_dict = [{"namespace": line_items[0][0], "pod": line_items[0][1],
+                      "persistentvolumeclaim": line_items[0][2], "persistentvolume": line_items[0][3],
+                      "storageclass": line_items[0][4], "persistentvolumeclaim_capacity_bytes": line_items[0][5],
+                      "persistentvolumeclaim_capacity_byte_seconds": line_items[0][6],
+                      "volume_request_storage_byte_seconds": line_items[0][7],
+                      "persistentvolumeclaim_usage_byte_seconds": line_items[0][8],
+                      "persistentvolume_labels": line_items[0][9], "persistentvolumeclaim_labels": line_items[0][10],
+                      "interval_start": report_items[0][0], "cluster_id": report_period_items[0][0]}]
         daily_counter = 0
-        curr_date = line_items[0][18].date()
+        report_counter = 0
+        curr_date = report_items[0][0].date()
         print(curr_date)
         items_counter = 1
+
         while items_counter < count:
-            if curr_date != line_items[items_counter][18].date():
+            # if current date needs to be iterated forward, then assert field comparison between raw and daily first
+            if curr_date != report_items[items_counter][0].date():
                 daily_values = self.get_ocp_daily_db_accessor(
-                    OCP_REPORT_TABLE_MAP['line_item_daily'],
-                    ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
-                     "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], curr_date)
+                    OCP_REPORT_TABLE_MAP['storage_line_item_daily'],
+                    ["cluster_id", "namespace", "pod", "persistentvolumeclaim", "persistentvolume",
+                     "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
+                     "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
+                     "persistentvolume_labels", "persistentvolumeclaim_labels"], curr_date)
+
                 while daily_counter < len(list_dict):
-                    self.assertEqual(list_dict[daily_counter]["usage_amount"], daily_values[daily_counter][2])
-                    self.assertEqual(list_dict[daily_counter]["unblended_rate"], daily_values[daily_counter][3])
-                    self.assertEqual(list_dict[daily_counter]["unblended_cost"], daily_values[daily_counter][4])
-                    self.assertEqual(list_dict[daily_counter]["blended_rate"], daily_values[daily_counter][5])
-                    self.assertEqual(list_dict[daily_counter]["blended_cost"], daily_values[daily_counter][6])
-                    self.assertEqual(list_dict[daily_counter]["public_on_demand_cost"], daily_values[daily_counter][7])
-                    self.assertEqual(list_dict[daily_counter]["public_on_demand_rate"], daily_values[daily_counter][8])
+                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_capacity_bytes"], daily_values[daily_counter][6])
+                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_capacity_byte_seconds"], daily_values[daily_counter][7])
+                    self.assertEqual(list_dict[daily_counter]["volume_request_storage_byte_seconds"], daily_values[daily_counter][8])
+                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_usage_byte_seconds"], daily_values[daily_counter][9])
                     daily_counter += 1
                 print("Raw vs Daily tests have passed!")
-                curr_date = line_items[items_counter][18].date()
+                curr_date = report_items[items_counter][0].date()
                 print(curr_date)
-                list_dict = [{"cost_entry_bill_id": line_items[items_counter][0],
-                              "cost_entry_product_id": line_items[items_counter][1],
-                              "cost_entry_pricing_id": line_items[items_counter][2],
-                              "cost_entry_reservation_id": line_items[items_counter][3],
-                              "resource_id": line_items[items_counter][4],
-                              "line_item_type": line_items[items_counter][5],
-                              "usage_account_id": line_items[items_counter][6],
-                              "usage_type": line_items[items_counter][7],
-                              "availability_zone": line_items[items_counter][8],
-                              "tax_type": line_items[items_counter][9], "product_code": line_items[items_counter][10],
-                              "usage_amount": line_items[items_counter][11],
-                              "unblended_rate": line_items[items_counter][12],
-                              "unblended_cost": line_items[items_counter][13],
-                              "blended_rate": line_items[items_counter][14],
-                              "blended_cost": line_items[items_counter][15],
-                              "public_on_demand_cost": line_items[items_counter][16],
-                              "public_on_demand_rate": line_items[items_counter][17],
-                              "usage_start": line_items[items_counter][18]}]
-            dict_counter = 0
-            flag = 0
-            while dict_counter < len(list_dict):
-                if (list_dict[dict_counter]["cost_entry_bill_id"] == line_items[items_counter][0] and
-                        list_dict[dict_counter]["cost_entry_product_id"] == line_items[items_counter][1] and
-                        list_dict[dict_counter]["cost_entry_pricing_id"] == line_items[items_counter][2] and
-                        list_dict[dict_counter]["cost_entry_reservation_id"] == line_items[items_counter][3] and
-                        list_dict[dict_counter]["resource_id"] == line_items[items_counter][4] and
-                        list_dict[dict_counter]["line_item_type"] == line_items[items_counter][5] and
-                        list_dict[dict_counter]["usage_account_id"] == line_items[items_counter][6] and
-                        list_dict[dict_counter]["usage_type"] == line_items[items_counter][7] and
-                        list_dict[dict_counter]["availability_zone"] == line_items[items_counter][8] and
-                        list_dict[dict_counter]["tax_type"] == line_items[items_counter][9] and
-                        list_dict[dict_counter]["product_code"] == line_items[items_counter][10] and
-                        list_dict[dict_counter]["usage_start"].date() == line_items[items_counter][18].date()):
-                    usage_amount = list_dict[dict_counter]["usage_amount"] + line_items[items_counter][11]
-                    unblended_rate = max(list_dict[dict_counter]["unblended_rate"], line_items[items_counter][12])
-                    unblended_cost = list_dict[dict_counter]["unblended_cost"] + line_items[items_counter][13]
-                    blended_rate = max(list_dict[dict_counter]["blended_rate"], line_items[items_counter][14])
-                    blended_cost = list_dict[dict_counter]["blended_cost"] + line_items[items_counter][15]
-                    public_on_demand_cost = list_dict[dict_counter]["public_on_demand_cost"] + \
-                                            line_items[items_counter][16]
-                    public_on_demand_rate = max(list_dict[dict_counter]["public_on_demand_rate"],
-                                                line_items[items_counter][17])
-                    dic_entry_temp = {"usage_amount": usage_amount, "unblended_rate": unblended_rate,
-                                      "unblended_cost": unblended_cost, "blended_rate": blended_rate,
-                                      "blended_cost": blended_cost,
-                                      "public_on_demand_cost": public_on_demand_cost,
-                                      "public_on_demand_rate": public_on_demand_rate}
-                    list_dict[dict_counter].update(dic_entry_temp)
-                    flag = 1
-                    break
-                dict_counter += 1
-            if flag == 0:
-                list_dict.append({"cost_entry_bill_id": line_items[items_counter][0],
-                                  "cost_entry_product_id": line_items[items_counter][1],
-                                  "cost_entry_pricing_id": line_items[items_counter][2],
-                                  "cost_entry_reservation_id": line_items[items_counter][3],
-                                  "resource_id": line_items[items_counter][4],
-                                  "line_item_type": line_items[items_counter][5],
-                                  "usage_account_id": line_items[items_counter][6],
-                                  "usage_type": line_items[items_counter][7],
-                                  "availability_zone": line_items[items_counter][8],
-                                  "tax_type": line_items[items_counter][9],
-                                  "product_code": line_items[items_counter][10],
-                                  "usage_amount": line_items[items_counter][11],
-                                  "unblended_rate": line_items[items_counter][12],
-                                  "unblended_cost": line_items[items_counter][13],
-                                  "blended_rate": line_items[items_counter][14],
-                                  "blended_cost": line_items[items_counter][15],
-                                  "public_on_demand_cost": line_items[items_counter][16],
-                                  "public_on_demand_rate": line_items[items_counter][17],
-                                  "usage_start": line_items[items_counter][18]})
-            items_counter += 1
+
+                while curr_date < report_period_items[report_counter][1].date():
+                    report_counter += 1
+                list_dict = [{"namespace": line_items[items_counter][0], "pod": line_items[items_counter][1],
+                              "persistentvolumeclaim": line_items[items_counter][2],
+                              "persistentvolume": line_items[items_counter][3],
+                              "storageclass": line_items[items_counter][4],
+                              "persistentvolumeclaim_capacity_bytes": line_items[items_counter][5],
+                              "persistentvolumeclaim_capacity_byte_seconds": line_items[items_counter][6],
+                              "volume_request_storage_byte_seconds": line_items[items_counter][7],
+                              "persistentvolumeclaim_usage_byte_seconds": line_items[items_counter][8],
+                              "persistentvolume_labels": line_items[items_counter][9],
+                              "persistentvolumeclaim_labels": line_items[items_counter][10],
+                              "interval_start": report_items[items_counter][0],
+                              "cluster_id": report_period_items[report_counter][0]}]
+                daily_counter = 0
+                items_counter += 1
+
+            # else, continue to sum and max fields for next hour of current day
+            else:
+                dict_counter = 0
+                flag = 0
+
+                while dict_counter < len(list_dict):
+                    if (list_dict[dict_counter]["namespace"] == line_items[items_counter][0] and
+                            list_dict[dict_counter]["pod"] == line_items[items_counter][1] and
+                            list_dict[dict_counter]["persistentvolumeclaim"] == line_items[items_counter][2] and
+                            list_dict[dict_counter]["persistentvolume"] == line_items[items_counter][3] and
+                            list_dict[dict_counter]["storageclass"] == line_items[items_counter][4] and
+                            list_dict[dict_counter]["persistentvolume_labels"] == line_items[items_counter][9] and
+                            list_dict[dict_counter]["persistentvolumeclaim_labels"] == line_items[items_counter][10] and
+                            list_dict[dict_counter]["cluster_id"] == report_period_items[report_counter][0] and
+                            list_dict[dict_counter]["interval_start"].date() == report_items[items_counter][0].date()):
+                        persistentvolumeclaim_capacity_bytes = max(list_dict[dict_counter]["persistentvolumeclaim_capacity_bytes"], line_items[items_counter][5])
+                        persistentvolumeclaim_capacity_byte_seconds = list_dict[dict_counter]["persistentvolumeclaim_capacity_byte_seconds"] + line_items[items_counter][6]
+                        volume_request_storage_byte_seconds = list_dict[dict_counter]["volume_request_storage_byte_seconds"] + line_items[items_counter][7]
+                        persistentvolumeclaim_usage_byte_seconds = list_dict[dict_counter]["persistentvolumeclaim_usage_byte_seconds"] + line_items[items_counter][8]
+                        dic_entry_temp = {"persistentvolumeclaim_capacity_bytes": persistentvolumeclaim_capacity_bytes,
+                                          "persistentvolumeclaim_capacity_byte_seconds": persistentvolumeclaim_capacity_byte_seconds,
+                                          "volume_request_storage_byte_seconds": volume_request_storage_byte_seconds,
+                                          "persistentvolumeclaim_usage_byte_seconds": persistentvolumeclaim_usage_byte_seconds}
+                        list_dict[dict_counter].update(dic_entry_temp)
+                        flag = 1
+                        break
+                    dict_counter += 1
+
+                if flag == 0:
+                    list_dict.append({"namespace": line_items[items_counter][0], "pod": line_items[items_counter][1],
+                                      "persistentvolumeclaim": line_items[items_counter][2],
+                                      "persistentvolume": line_items[items_counter][3],
+                                      "storageclass": line_items[items_counter][4],
+                                      "persistentvolumeclaim_capacity_bytes": line_items[items_counter][5],
+                                      "persistentvolumeclaim_capacity_byte_seconds": line_items[items_counter][6],
+                                      "volume_request_storage_byte_seconds": line_items[items_counter][7],
+                                      "persistentvolumeclaim_usage_byte_seconds": line_items[items_counter][8],
+                                      "persistentvolume_labels": line_items[items_counter][9],
+                                      "persistentvolumeclaim_labels": line_items[items_counter][10],
+                                      "interval_start": report_items[items_counter][0],
+                                      "cluster_id": report_period_items[report_counter][0]})
+                items_counter += 1
 
         print("All Raw vs Daily tests have passed!")
 
         # database test between daily and daily_summary reporting tables
         start_interval, end_interval = (self.get_time_interval())
+        today = self.get_today_date().date()
+        if end_interval == today:
+            end_interval = today
         for date_val in self.date_range(start_interval, end_interval):
             print("Date: " + str(date_val))
             parse_date = datetime.datetime.strptime(str(date_val), "%Y-%m-%d")
@@ -290,12 +288,14 @@ class OCPDailySummaryTest(MasuTestCase):
             self.assertEqual(float(daily_usage[0][10]) / 3600 * (2 ** (-30)), daily_summary_usage[0][10])
             self.assertEqual(float(daily_usage[0][11]) / 3600, daily_summary_usage[0][11])
             self.assertEqual(float(daily_usage[0][12]) / 3600 * (2 ** (-30)), daily_summary_usage[0][12])
+            print("Daily vs Daily Summary tests have passed!")
 
-            print("DB Accessor tests have passed!")
+        print("All Daily vs Daily Summary tests have passed!")
+        print("All database tests have passed!")
 
 
 # test script
-psql = OCPDailySummaryTest()
+psql = OCPDailyTest()
 psql.setUp()
 psql.test_comparison_db_accessor()
 psql.tearDown()
