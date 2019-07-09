@@ -184,7 +184,7 @@ class AWSDailyTest(MasuTestCase):
             self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
             print("Raw SQL tests have passed!")
 
-    # Main test method
+    # Main test function
     # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
     def test_comparison_db_accessor(self):
         # database test between raw and daily reporting tables
@@ -213,12 +213,15 @@ class AWSDailyTest(MasuTestCase):
         curr_date = line_items[0][18].date()
         print(curr_date)
         items_counter = 1
+
         while items_counter < count:
+            # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != line_items[items_counter][18].date():
                 daily_values = self.get_aws_daily_db_accessor(
                     AWS_CUR_TABLE_MAP['line_item_daily'],
                     ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
                      "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], curr_date)
+
                 while daily_counter < len(list_dict):
                     self.assertEqual(list_dict[daily_counter]["usage_amount"], daily_values[daily_counter][2])
                     self.assertEqual(list_dict[daily_counter]["unblended_rate"], daily_values[daily_counter][3])
@@ -249,60 +252,67 @@ class AWSDailyTest(MasuTestCase):
                               "public_on_demand_cost": line_items[items_counter][16],
                               "public_on_demand_rate": line_items[items_counter][17],
                               "usage_start": line_items[items_counter][18]}]
-            dict_counter = 0
-            flag = 0
-            while dict_counter < len(list_dict):
-                if (list_dict[dict_counter]["cost_entry_bill_id"] == line_items[items_counter][0] and
-                        list_dict[dict_counter]["cost_entry_product_id"] == line_items[items_counter][1] and
-                        list_dict[dict_counter]["cost_entry_pricing_id"] == line_items[items_counter][2] and
-                        list_dict[dict_counter]["cost_entry_reservation_id"] == line_items[items_counter][3] and
-                        list_dict[dict_counter]["resource_id"] == line_items[items_counter][4] and
-                        list_dict[dict_counter]["line_item_type"] == line_items[items_counter][5] and
-                        list_dict[dict_counter]["usage_account_id"] == line_items[items_counter][6] and
-                        list_dict[dict_counter]["usage_type"] == line_items[items_counter][7] and
-                        list_dict[dict_counter]["availability_zone"] == line_items[items_counter][8] and
-                        list_dict[dict_counter]["tax_type"] == line_items[items_counter][9] and
-                        list_dict[dict_counter]["product_code"] == line_items[items_counter][10] and
-                        list_dict[dict_counter]["usage_start"].date() == line_items[items_counter][18].date()):
-                    usage_amount = list_dict[dict_counter]["usage_amount"] + line_items[items_counter][11]
-                    unblended_rate = max(list_dict[dict_counter]["unblended_rate"], line_items[items_counter][12])
-                    unblended_cost = list_dict[dict_counter]["unblended_cost"] + line_items[items_counter][13]
-                    blended_rate = max(list_dict[dict_counter]["blended_rate"], line_items[items_counter][14])
-                    blended_cost = list_dict[dict_counter]["blended_cost"] + line_items[items_counter][15]
-                    public_on_demand_cost = list_dict[dict_counter]["public_on_demand_cost"] + \
-                                            line_items[items_counter][16]
-                    public_on_demand_rate = max(list_dict[dict_counter]["public_on_demand_rate"],
-                                                line_items[items_counter][17])
-                    dic_entry_temp = {"usage_amount": usage_amount, "unblended_rate": unblended_rate,
-                                      "unblended_cost": unblended_cost, "blended_rate": blended_rate,
-                                      "blended_cost": blended_cost,
-                                      "public_on_demand_cost": public_on_demand_cost,
-                                      "public_on_demand_rate": public_on_demand_rate}
-                    list_dict[dict_counter].update(dic_entry_temp)
-                    flag = 1
-                    break
-                dict_counter += 1
-            if flag == 0:
-                list_dict.append({"cost_entry_bill_id": line_items[items_counter][0],
-                                  "cost_entry_product_id": line_items[items_counter][1],
-                                  "cost_entry_pricing_id": line_items[items_counter][2],
-                                  "cost_entry_reservation_id": line_items[items_counter][3],
-                                  "resource_id": line_items[items_counter][4],
-                                  "line_item_type": line_items[items_counter][5],
-                                  "usage_account_id": line_items[items_counter][6],
-                                  "usage_type": line_items[items_counter][7],
-                                  "availability_zone": line_items[items_counter][8],
-                                  "tax_type": line_items[items_counter][9],
-                                  "product_code": line_items[items_counter][10],
-                                  "usage_amount": line_items[items_counter][11],
-                                  "unblended_rate": line_items[items_counter][12],
-                                  "unblended_cost": line_items[items_counter][13],
-                                  "blended_rate": line_items[items_counter][14],
-                                  "blended_cost": line_items[items_counter][15],
-                                  "public_on_demand_cost": line_items[items_counter][16],
-                                  "public_on_demand_rate": line_items[items_counter][17],
-                                  "usage_start": line_items[items_counter][18]})
-            items_counter += 1
+                daily_counter = 0
+                items_counter += 1
+
+            # else, continue to sum and max fields for next hour of current day
+            else:
+                dict_counter = 0
+                flag = 0
+
+                while dict_counter < len(list_dict):
+                    if (list_dict[dict_counter]["cost_entry_bill_id"] == line_items[items_counter][0] and
+                            list_dict[dict_counter]["cost_entry_product_id"] == line_items[items_counter][1] and
+                            list_dict[dict_counter]["cost_entry_pricing_id"] == line_items[items_counter][2] and
+                            list_dict[dict_counter]["cost_entry_reservation_id"] == line_items[items_counter][3] and
+                            list_dict[dict_counter]["resource_id"] == line_items[items_counter][4] and
+                            list_dict[dict_counter]["line_item_type"] == line_items[items_counter][5] and
+                            list_dict[dict_counter]["usage_account_id"] == line_items[items_counter][6] and
+                            list_dict[dict_counter]["usage_type"] == line_items[items_counter][7] and
+                            list_dict[dict_counter]["availability_zone"] == line_items[items_counter][8] and
+                            list_dict[dict_counter]["tax_type"] == line_items[items_counter][9] and
+                            list_dict[dict_counter]["product_code"] == line_items[items_counter][10] and
+                            list_dict[dict_counter]["usage_start"].date() == line_items[items_counter][18].date()):
+                        usage_amount = list_dict[dict_counter]["usage_amount"] + line_items[items_counter][11]
+                        unblended_rate = max(list_dict[dict_counter]["unblended_rate"], line_items[items_counter][12])
+                        unblended_cost = list_dict[dict_counter]["unblended_cost"] + line_items[items_counter][13]
+                        blended_rate = max(list_dict[dict_counter]["blended_rate"], line_items[items_counter][14])
+                        blended_cost = list_dict[dict_counter]["blended_cost"] + line_items[items_counter][15]
+                        public_on_demand_cost = list_dict[dict_counter]["public_on_demand_cost"] + \
+                                                line_items[items_counter][16]
+                        public_on_demand_rate = max(list_dict[dict_counter]["public_on_demand_rate"],
+                                                    line_items[items_counter][17])
+                        dic_entry_temp = {"usage_amount": usage_amount, "unblended_rate": unblended_rate,
+                                          "unblended_cost": unblended_cost, "blended_rate": blended_rate,
+                                          "blended_cost": blended_cost,
+                                          "public_on_demand_cost": public_on_demand_cost,
+                                          "public_on_demand_rate": public_on_demand_rate}
+                        list_dict[dict_counter].update(dic_entry_temp)
+                        flag = 1
+                        break
+                    dict_counter += 1
+
+                if flag == 0:
+                    list_dict.append({"cost_entry_bill_id": line_items[items_counter][0],
+                                      "cost_entry_product_id": line_items[items_counter][1],
+                                      "cost_entry_pricing_id": line_items[items_counter][2],
+                                      "cost_entry_reservation_id": line_items[items_counter][3],
+                                      "resource_id": line_items[items_counter][4],
+                                      "line_item_type": line_items[items_counter][5],
+                                      "usage_account_id": line_items[items_counter][6],
+                                      "usage_type": line_items[items_counter][7],
+                                      "availability_zone": line_items[items_counter][8],
+                                      "tax_type": line_items[items_counter][9],
+                                      "product_code": line_items[items_counter][10],
+                                      "usage_amount": line_items[items_counter][11],
+                                      "unblended_rate": line_items[items_counter][12],
+                                      "unblended_cost": line_items[items_counter][13],
+                                      "blended_rate": line_items[items_counter][14],
+                                      "blended_cost": line_items[items_counter][15],
+                                      "public_on_demand_cost": line_items[items_counter][16],
+                                      "public_on_demand_rate": line_items[items_counter][17],
+                                      "usage_start": line_items[items_counter][18]})
+                items_counter += 1
 
         print("All Raw vs Daily tests have passed!")
 
