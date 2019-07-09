@@ -15,6 +15,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import datetime
 from datetime import timedelta
 import numpy as np
 from masu.database import AWS_CUR_TABLE_MAP
@@ -23,7 +24,7 @@ from masu.database.reporting_common_db_accessor import ReportingCommonDBAccessor
 from tests import MasuTestCase
 
 
-class AWSDailySummaryTest(MasuTestCase):
+class AWSDailyTest(MasuTestCase):
     """Test Cases for the AWS Daily and Daily_Summary database tables."""
 
     # Select schema and open connection with PostgreSQL and SQLAlchemy
@@ -48,6 +49,9 @@ class AWSDailySummaryTest(MasuTestCase):
         self.accessor.close_connections()
         self.accessor.close_session()
         print("Connection is closed")
+
+    def get_today_date(self):
+        return datetime.datetime.now().replace(microsecond=0, second=0, minute=0)
 
     # Helper raw SQL function to select column data from table with optional query values of row and order by
     def table_select(self, table_name, columns=None, rows=None, order_by=None):
@@ -180,7 +184,8 @@ class AWSDailySummaryTest(MasuTestCase):
             self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
             print("Raw SQL tests have passed!")
 
-    # Assert daily and daily_summary values are correct based on DB accessor queries using SQLAlchemy
+    # Main test method
+    # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
     def test_comparison_db_accessor(self):
         # database test between raw and daily reporting tables
         count = self.table_select(AWS_CUR_TABLE_MAP['line_item'], "count(*)")[0][0]
@@ -303,6 +308,9 @@ class AWSDailySummaryTest(MasuTestCase):
 
         # database test between daily and daily_summary reporting tables
         start_interval, end_interval = (self.get_time_interval(AWS_CUR_TABLE_MAP['line_item_daily']))
+        today = self.get_today_date().date()
+        if end_interval == today:
+            end_interval = today
         for date_val in self.date_range(start_interval, end_interval):
             print("Date: " + str(date_val))
             daily_values = self.get_aws_daily_db_accessor(
@@ -347,7 +355,7 @@ class AWSDailySummaryTest(MasuTestCase):
 
 
 # test script
-psql = AWSDailySummaryTest()
+psql = AWSDailyTest()
 psql.setUp()
 # psql.test_comparison_raw()
 psql.test_comparison_db_accessor()
