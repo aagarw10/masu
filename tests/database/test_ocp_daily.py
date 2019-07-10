@@ -109,117 +109,370 @@ class OCPDailyTest(MasuTestCase):
     # Main test function
     # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
     def test_comparison_db_accessor(self):
-        # database test between raw and daily reporting tables
-        count = self.table_select(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
+        # database test between STORAGE raw and daily reporting tables
+        count = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item'], "count(*)")[0][0]
+
+        # ocp storage start datetime field
         report_items = self.get_ocp_line_item(
             OCP_REPORT_TABLE_MAP['report'],
             ["interval_start"])
+
+        # time interval used to check cluster id
         report_period_items = self.get_ocp_line_item(
             OCP_REPORT_TABLE_MAP['report_period'],
             ["cluster_id", "report_period_start", "report_period_end"])
-        line_items = self.get_ocp_line_item(
+
+        # get ocp storage line item fields
+        storage_line_items = self.get_ocp_line_item(
             OCP_REPORT_TABLE_MAP['storage_line_item'],
             ["namespace", "pod", "persistentvolumeclaim", "persistentvolume",
              "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
              "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
              "persistentvolume_labels", "persistentvolumeclaim_labels"])
-        list_dict = [{"namespace": line_items[0][0], "pod": line_items[0][1],
-                      "persistentvolumeclaim": line_items[0][2], "persistentvolume": line_items[0][3],
-                      "storageclass": line_items[0][4], "persistentvolumeclaim_capacity_bytes": line_items[0][5],
-                      "persistentvolumeclaim_capacity_byte_seconds": line_items[0][6],
-                      "volume_request_storage_byte_seconds": line_items[0][7],
-                      "persistentvolumeclaim_usage_byte_seconds": line_items[0][8],
-                      "persistentvolume_labels": line_items[0][9], "persistentvolumeclaim_labels": line_items[0][10],
-                      "interval_start": report_items[0][0], "cluster_id": report_period_items[0][0]}]
+
+        # initialize list of dictionaries to store each unique line item
+        storage_list_dict = [{"namespace": storage_line_items[0][0], "pod": storage_line_items[0][1],
+                              "persistentvolumeclaim": storage_line_items[0][2],
+                              "persistentvolume": storage_line_items[0][3],
+                              "storageclass": storage_line_items[0][4],
+                              "persistentvolumeclaim_capacity_bytes": storage_line_items[0][5],
+                              "persistentvolumeclaim_capacity_byte_seconds": storage_line_items[0][6],
+                              "volume_request_storage_byte_seconds": storage_line_items[0][7],
+                              "persistentvolumeclaim_usage_byte_seconds": storage_line_items[0][8],
+                              "persistentvolume_labels": storage_line_items[0][9],
+                              "persistentvolumeclaim_labels": storage_line_items[0][10],
+                              "interval_start": report_items[0][0], "cluster_id": report_period_items[0][0]}]
+
+        # counter to keep iterate through length of storage_list_dict
         daily_counter = 0
+        # counter for index within report_period_items table
         report_counter = 0
+        # get current date of first line item
         curr_date = report_items[0][0].date()
-        print(curr_date)
+        # index of ocp storage line items
         items_counter = 1
 
+        # iterate through all line items based on count value of reporting table
         while items_counter < count:
             # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != report_items[items_counter][0].date():
-                daily_values = self.get_ocp_daily_db_accessor(
+                # get ocp storage daily fields
+                daily_storage = self.get_ocp_daily_db_accessor(
                     OCP_REPORT_TABLE_MAP['storage_line_item_daily'],
                     ["cluster_id", "namespace", "pod", "persistentvolumeclaim", "persistentvolume",
-                     "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
+                     "storageclass", "persistentvolumeclaim_capacity_bytes",
+                     "persistentvolumeclaim_capacity_byte_seconds",
                      "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
                      "persistentvolume_labels", "persistentvolumeclaim_labels"], curr_date)
 
-                while daily_counter < len(list_dict):
-                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_capacity_bytes"], daily_values[daily_counter][6])
-                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_capacity_byte_seconds"], daily_values[daily_counter][7])
-                    self.assertEqual(list_dict[daily_counter]["volume_request_storage_byte_seconds"], daily_values[daily_counter][8])
-                    self.assertEqual(list_dict[daily_counter]["persistentvolumeclaim_usage_byte_seconds"], daily_values[daily_counter][9])
-                    daily_counter += 1
-                print("Raw vs Daily tests have passed!")
-                curr_date = report_items[items_counter][0].date()
+                # print current date of line item
                 print(curr_date)
 
+                # assertion between the total summation of line item values and daily values for the current date
+                while daily_counter < len(storage_list_dict):
+                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_bytes"],
+                                     daily_storage[daily_counter][6])
+                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_byte_seconds"],
+                                     daily_storage[daily_counter][7])
+                    self.assertEqual(storage_list_dict[daily_counter]["volume_request_storage_byte_seconds"],
+                                     daily_storage[daily_counter][8])
+                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_usage_byte_seconds"],
+                                     daily_storage[daily_counter][9])
+                    daily_counter += 1
+                    print("OCP Storage Raw vs Daily tests have passed!")
+
+                # get current date of line item
+                curr_date = report_items[items_counter][0].date()
+
+                # increment to correct report time interval
                 while curr_date < report_period_items[report_counter][1].date():
                     report_counter += 1
-                list_dict = [{"namespace": line_items[items_counter][0], "pod": line_items[items_counter][1],
-                              "persistentvolumeclaim": line_items[items_counter][2],
-                              "persistentvolume": line_items[items_counter][3],
-                              "storageclass": line_items[items_counter][4],
-                              "persistentvolumeclaim_capacity_bytes": line_items[items_counter][5],
-                              "persistentvolumeclaim_capacity_byte_seconds": line_items[items_counter][6],
-                              "volume_request_storage_byte_seconds": line_items[items_counter][7],
-                              "persistentvolumeclaim_usage_byte_seconds": line_items[items_counter][8],
-                              "persistentvolume_labels": line_items[items_counter][9],
-                              "persistentvolumeclaim_labels": line_items[items_counter][10],
-                              "interval_start": report_items[items_counter][0],
-                              "cluster_id": report_period_items[report_counter][0]}]
+
+                # re-initialize list of dictionaries with new line item and repeat while loop
+                storage_list_dict = [
+                    {"namespace": storage_line_items[items_counter][0], "pod": storage_line_items[items_counter][1],
+                     "persistentvolumeclaim": storage_line_items[items_counter][2],
+                     "persistentvolume": storage_line_items[items_counter][3],
+                     "storageclass": storage_line_items[items_counter][4],
+                     "persistentvolumeclaim_capacity_bytes": storage_line_items[items_counter][5],
+                     "persistentvolumeclaim_capacity_byte_seconds": storage_line_items[items_counter][6],
+                     "volume_request_storage_byte_seconds": storage_line_items[items_counter][7],
+                     "persistentvolumeclaim_usage_byte_seconds": storage_line_items[items_counter][8],
+                     "persistentvolume_labels": storage_line_items[items_counter][9],
+                     "persistentvolumeclaim_labels": storage_line_items[items_counter][10],
+                     "interval_start": report_items[items_counter][0],
+                     "cluster_id": report_period_items[report_counter][0]}]
                 daily_counter = 0
                 items_counter += 1
 
             # else, continue to sum and max fields for next hour of current day
             else:
+                # counter for iterating through storage_list_dict (if it is length > 1)
                 dict_counter = 0
+                # flag to indicate that fields of next line item match an entry in our storage_list_dict and values
+                # are summed or maxed appropriately
                 flag = 0
 
-                while dict_counter < len(list_dict):
-                    if (list_dict[dict_counter]["namespace"] == line_items[items_counter][0] and
-                            list_dict[dict_counter]["pod"] == line_items[items_counter][1] and
-                            list_dict[dict_counter]["persistentvolumeclaim"] == line_items[items_counter][2] and
-                            list_dict[dict_counter]["persistentvolume"] == line_items[items_counter][3] and
-                            list_dict[dict_counter]["storageclass"] == line_items[items_counter][4] and
-                            list_dict[dict_counter]["persistentvolume_labels"] == line_items[items_counter][9] and
-                            list_dict[dict_counter]["persistentvolumeclaim_labels"] == line_items[items_counter][10] and
-                            list_dict[dict_counter]["cluster_id"] == report_period_items[report_counter][0] and
-                            list_dict[dict_counter]["interval_start"].date() == report_items[items_counter][0].date()):
-                        persistentvolumeclaim_capacity_bytes = max(list_dict[dict_counter]["persistentvolumeclaim_capacity_bytes"], line_items[items_counter][5])
-                        persistentvolumeclaim_capacity_byte_seconds = list_dict[dict_counter]["persistentvolumeclaim_capacity_byte_seconds"] + line_items[items_counter][6]
-                        volume_request_storage_byte_seconds = list_dict[dict_counter]["volume_request_storage_byte_seconds"] + line_items[items_counter][7]
-                        persistentvolumeclaim_usage_byte_seconds = list_dict[dict_counter]["persistentvolumeclaim_usage_byte_seconds"] + line_items[items_counter][8]
-                        dic_entry_temp = {"persistentvolumeclaim_capacity_bytes": persistentvolumeclaim_capacity_bytes,
-                                          "persistentvolumeclaim_capacity_byte_seconds": persistentvolumeclaim_capacity_byte_seconds,
-                                          "volume_request_storage_byte_seconds": volume_request_storage_byte_seconds,
-                                          "persistentvolumeclaim_usage_byte_seconds": persistentvolumeclaim_usage_byte_seconds}
-                        list_dict[dict_counter].update(dic_entry_temp)
+                # iterate through storage_list_dict entries (usually only one line item bc database is sorted by date)
+                while dict_counter < len(storage_list_dict):
+                    # check if group by fields match
+                    if (storage_list_dict[dict_counter]["namespace"] == storage_line_items[items_counter][0] and
+                            storage_list_dict[dict_counter]["pod"] == storage_line_items[items_counter][1] and
+                            storage_list_dict[dict_counter]["persistentvolumeclaim"] == storage_line_items[items_counter][2] and
+                            storage_list_dict[dict_counter]["persistentvolume"] == storage_line_items[items_counter][3] and
+                            storage_list_dict[dict_counter]["storageclass"] == storage_line_items[items_counter][4] and
+                            storage_list_dict[dict_counter]["persistentvolume_labels"] == storage_line_items[items_counter][9] and
+                            storage_list_dict[dict_counter]["persistentvolumeclaim_labels"] == storage_line_items[items_counter][10] and
+                            storage_list_dict[dict_counter]["cluster_id"] == report_period_items[report_counter][0] and
+                            storage_list_dict[dict_counter]["interval_start"].date() == report_items[items_counter][0].date()):
+
+                        # sum or max values based on database line item to daily report processing
+                        cap_bytes = max(
+                            storage_list_dict[dict_counter]["persistentvolumeclaim_capacity_bytes"],
+                            storage_line_items[items_counter][5])
+                        cap_bytes_sec = storage_list_dict[dict_counter]["persistentvolumeclaim_capacity_byte_seconds"] + \
+                                        storage_line_items[items_counter][6]
+                        storage_bytes_sec = storage_list_dict[dict_counter]["volume_request_storage_byte_seconds"] + \
+                                            storage_line_items[items_counter][7]
+                        usage_bytes_sec = storage_list_dict[dict_counter]["persistentvolumeclaim_usage_byte_seconds"] + \
+                                          storage_line_items[items_counter][8]
+
+                        # update the storage_list_dict entry
+                        dic_entry_temp = {"persistentvolumeclaim_capacity_bytes": cap_bytes,
+                                          "persistentvolumeclaim_capacity_byte_seconds": cap_bytes_sec,
+                                          "volume_request_storage_byte_seconds": storage_bytes_sec,
+                                          "persistentvolumeclaim_usage_byte_seconds": usage_bytes_sec}
+                        storage_list_dict[dict_counter].update(dic_entry_temp)
+
+                        # set flag
                         flag = 1
                         break
                     dict_counter += 1
 
+                # unusual case: if set of fields did not match any existing entries in dictionaries, then create new
+                # entry within usage_list_dict
                 if flag == 0:
-                    list_dict.append({"namespace": line_items[items_counter][0], "pod": line_items[items_counter][1],
-                                      "persistentvolumeclaim": line_items[items_counter][2],
-                                      "persistentvolume": line_items[items_counter][3],
-                                      "storageclass": line_items[items_counter][4],
-                                      "persistentvolumeclaim_capacity_bytes": line_items[items_counter][5],
-                                      "persistentvolumeclaim_capacity_byte_seconds": line_items[items_counter][6],
-                                      "volume_request_storage_byte_seconds": line_items[items_counter][7],
-                                      "persistentvolumeclaim_usage_byte_seconds": line_items[items_counter][8],
-                                      "persistentvolume_labels": line_items[items_counter][9],
-                                      "persistentvolumeclaim_labels": line_items[items_counter][10],
-                                      "interval_start": report_items[items_counter][0],
-                                      "cluster_id": report_period_items[report_counter][0]})
+                    storage_list_dict.append({"namespace": storage_line_items[items_counter][0],
+                                              "pod": storage_line_items[items_counter][1],
+                                              "persistentvolumeclaim": storage_line_items[items_counter][2],
+                                              "persistentvolume": storage_line_items[items_counter][3],
+                                              "storageclass": storage_line_items[items_counter][4],
+                                              "persistentvolumeclaim_capacity_bytes": storage_line_items[items_counter][5],
+                                              "persistentvolumeclaim_capacity_byte_seconds":
+                                                  storage_line_items[items_counter][6],
+                                              "volume_request_storage_byte_seconds": storage_line_items[items_counter][7],
+                                              "persistentvolumeclaim_usage_byte_seconds":
+                                                  storage_line_items[items_counter][8],
+                                              "persistentvolume_labels": storage_line_items[items_counter][9],
+                                              "persistentvolumeclaim_labels": storage_line_items[items_counter][10],
+                                              "interval_start": report_items[items_counter][0],
+                                              "cluster_id": report_period_items[report_counter][0]})
+                items_counter += 1
+
+        # database test between USAGE raw and daily reporting tables
+        count = self.table_select(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
+
+        # ocp usage start datetime field
+        report_items = self.get_ocp_line_item(
+            OCP_REPORT_TABLE_MAP['report'],
+            ["interval_start"])
+
+        # time interval used to check cluster id
+        report_period_items = self.get_ocp_line_item(
+            OCP_REPORT_TABLE_MAP['report_period'],
+            ["cluster_id", "report_period_start", "report_period_end"])
+
+        # get ocp usage line item fields
+        usage_line_items = self.get_ocp_line_item(
+            OCP_REPORT_TABLE_MAP['line_item'],
+            ["namespace", "pod", "node", "pod_usage_cpu_core_seconds", "pod_request_cpu_core_seconds",
+             "pod_limit_cpu_core_seconds", "pod_usage_memory_byte_seconds",
+             "pod_request_memory_byte_seconds", "pod_limit_memory_byte_seconds",
+             "node_capacity_cpu_core_seconds", "node_capacity_memory_bytes", "node_capacity_cpu_cores",
+             "node_capacity_memory_byte_seconds", "pod_labels", "resource_id"])
+
+        # initialize list of dictionaries to store each unique line item
+        usage_list_dict = [{"namespace": usage_line_items[0][0], "pod": usage_line_items[0][1],
+                            "node": usage_line_items[0][2], "pod_usage_cpu_core_seconds": usage_line_items[0][3],
+                            "pod_request_cpu_core_seconds": usage_line_items[0][4],
+                            "pod_limit_cpu_core_seconds": usage_line_items[0][5],
+                            "pod_usage_memory_byte_seconds": usage_line_items[0][6],
+                            "pod_request_memory_byte_seconds": usage_line_items[0][7],
+                            "pod_limit_memory_byte_seconds": usage_line_items[0][8],
+                            "node_capacity_cpu_core_seconds": usage_line_items[0][9],
+                            "node_capacity_memory_bytes": usage_line_items[0][10],
+                            "node_capacity_cpu_cores": usage_line_items[0][11],
+                            "node_capacity_memory_byte_seconds": usage_line_items[0][12],
+                            "pod_labels": usage_line_items[0][13], "resource_id": usage_line_items[0][14],
+                            "interval_start": report_items[0][0], "cluster_id": report_period_items[0][0]}]
+
+        # counter to keep iterate through length of usage_list_dict
+        daily_counter = 0
+        # counter for index within report_period_items table
+        report_counter = 0
+        # get current date of first line item
+        curr_date = report_items[0][0].date()
+        # index of ocp usage line items
+        items_counter = 1
+
+        # iterate through all line items based on count value of reporting table
+        while items_counter < count:
+            # if current date needs to be iterated forward, then assert field comparison between raw and daily first
+            if curr_date != report_items[items_counter][0].date():
+                # get ocp usage daily fields
+                daily_usage = self.get_ocp_daily_db_accessor(
+                    OCP_REPORT_TABLE_MAP['line_item_daily'],
+                    ["cluster_id", "namespace", "pod", "node", "pod_usage_cpu_core_seconds",
+                     "pod_request_cpu_core_seconds",
+                     "pod_limit_cpu_core_seconds", "pod_usage_memory_byte_seconds",
+                     "pod_request_memory_byte_seconds", "pod_limit_memory_byte_seconds",
+                     "node_capacity_cpu_cores",
+                     "node_capacity_cpu_core_seconds", "node_capacity_memory_bytes",
+                     "node_capacity_memory_byte_seconds", "pod_labels", "resource_id"], curr_date)
+
+                # print current date of line item
+                print(curr_date)
+
+                # assertion between the total summation of line item values and daily values for the current date
+                while daily_counter < len(usage_list_dict):
+                    self.assertEqual(usage_list_dict[daily_counter]["cluster_id"],
+                                     daily_usage[daily_counter][0])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_usage_cpu_core_seconds"],
+                                     daily_usage[daily_counter][4])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_request_cpu_core_seconds"],
+                                     daily_usage[daily_counter][5])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_limit_cpu_core_seconds"],
+                                     daily_usage[daily_counter][6])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_usage_memory_byte_seconds"],
+                                     daily_usage[daily_counter][7])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_request_memory_byte_seconds"],
+                                     daily_usage[daily_counter][8])
+                    self.assertEqual(usage_list_dict[daily_counter]["pod_limit_memory_byte_seconds"],
+                                     daily_usage[daily_counter][9])
+                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_core_seconds"],
+                                     daily_usage[daily_counter][11])
+                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_bytes"],
+                                     daily_usage[daily_counter][12])
+                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_cores"],
+                                     daily_usage[daily_counter][10])
+                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_byte_seconds"],
+                                     daily_usage[daily_counter][13])
+
+                    daily_counter += 1
+                    print("OCP Usage Raw vs Daily tests have passed!")
+
+                # get current date of line item
+                curr_date = report_items[items_counter][0].date()
+
+                # increment to correct report time interval
+                while curr_date < report_period_items[report_counter][1].date():
+                    report_counter += 1
+
+                # re-initialize list of dictionaries with new line item and repeat while loop
+                usage_list_dict = [{"namespace": usage_line_items[items_counter][0],
+                                    "pod": usage_line_items[items_counter][1],
+                                    "node": usage_line_items[items_counter][2],
+                                    "pod_usage_cpu_core_seconds": usage_line_items[items_counter][3],
+                                    "pod_request_cpu_core_seconds": usage_line_items[items_counter][4],
+                                    "pod_limit_cpu_core_seconds": usage_line_items[items_counter][5],
+                                    "pod_usage_memory_byte_seconds": usage_line_items[items_counter][6],
+                                    "pod_request_memory_byte_seconds": usage_line_items[items_counter][7],
+                                    "pod_limit_memory_byte_seconds": usage_line_items[items_counter][8],
+                                    "node_capacity_cpu_core_seconds": usage_line_items[items_counter][9],
+                                    "node_capacity_memory_bytes": usage_line_items[items_counter][10],
+                                    "node_capacity_cpu_cores": usage_line_items[items_counter][11],
+                                    "node_capacity_memory_byte_seconds": usage_line_items[items_counter][12],
+                                    "pod_labels": usage_line_items[items_counter][13],
+                                    "resource_id": usage_line_items[items_counter][14],
+                                    "interval_start": report_items[items_counter][0],
+                                    "cluster_id": report_period_items[report_counter][0]}]
+                daily_counter = 0
+                items_counter += 1
+
+            # else, continue to sum and max fields for next hour of current day
+            else:
+                # counter for iterating through usage_list_dict (if it is length > 1)
+                dict_counter = 0
+                # flag to indicate that fields of next line item match an entry in our usage_list_dict and values
+                # are summed or maxed appropriately
+                flag = 0
+
+                # iterate through usage_list_dict entries (usually only one line item bc database is sorted by date)
+                while dict_counter < len(usage_list_dict):
+                    # check if group by fields match
+                    if (usage_list_dict[dict_counter]["namespace"] == usage_line_items[items_counter][0] and
+                            usage_list_dict[dict_counter]["pod"] == usage_line_items[items_counter][1] and
+                            usage_list_dict[dict_counter]["node"] == usage_line_items[items_counter][2] and
+                            usage_list_dict[dict_counter]["pod_labels"] == usage_line_items[items_counter][13] and
+                            usage_list_dict[dict_counter]["resource_id"] == usage_line_items[items_counter][14] and
+                            usage_list_dict[dict_counter]["cluster_id"] == report_period_items[report_counter][0] and
+                            usage_list_dict[dict_counter]["interval_start"].date() == report_items[items_counter][0].date()):
+
+                        # sum or max values based on database line item to daily report processing
+                        cpu_usage = usage_list_dict[dict_counter]["pod_usage_cpu_core_seconds"] + \
+                                        usage_line_items[items_counter][3]
+                        cup_request = usage_list_dict[dict_counter]["pod_request_cpu_core_seconds"] + \
+                                        usage_line_items[items_counter][4]
+                        cpu_limit = usage_list_dict[dict_counter]["pod_limit_cpu_core_seconds"] + \
+                                        usage_line_items[items_counter][5]
+                        mem_usage = usage_list_dict[dict_counter]["pod_usage_memory_byte_seconds"] + \
+                                        usage_line_items[items_counter][6]
+                        mem_request = usage_list_dict[dict_counter]["pod_request_memory_byte_seconds"] + \
+                                        usage_line_items[items_counter][7]
+                        mem_limit = usage_list_dict[dict_counter]["pod_limit_memory_byte_seconds"] + \
+                                        usage_line_items[items_counter][8]
+                        cpu_core_sec = usage_list_dict[dict_counter]["node_capacity_cpu_core_seconds"] + \
+                                        usage_line_items[items_counter][9]
+                        mem_bytes = max(usage_list_dict[dict_counter]["node_capacity_memory_bytes"],
+                                        usage_line_items[items_counter][10])
+                        cpu_cores = max(usage_list_dict[dict_counter]["node_capacity_cpu_cores"],
+                                        usage_line_items[items_counter][11])
+                        mem_byte_sec = usage_list_dict[dict_counter]["node_capacity_memory_byte_seconds"] + \
+                                        usage_line_items[items_counter][12]
+
+                        # update the usage_list_dict entry
+                        dic_entry_temp = {"pod_usage_cpu_core_seconds": cpu_usage,
+                                          "pod_request_cpu_core_seconds": cup_request,
+                                          "pod_limit_cpu_core_seconds": cpu_limit,
+                                          "pod_usage_memory_byte_seconds": mem_usage,
+                                          "pod_request_memory_byte_seconds": mem_request,
+                                          "pod_limit_memory_byte_seconds": mem_limit,
+                                          "node_capacity_cpu_core_seconds": cpu_core_sec,
+                                          "node_capacity_memory_bytes": mem_bytes,
+                                          "node_capacity_cpu_cores": cpu_cores,
+                                          "node_capacity_memory_byte_seconds": mem_byte_sec}
+                        usage_list_dict[dict_counter].update(dic_entry_temp)
+
+                        # set flag
+                        flag = 1
+                        break
+                    dict_counter += 1
+
+                # unusual case: if set of fields did not match any existing entries in dictionaries, then create new
+                # entry within usage_list_dict
+                if flag == 0:
+                    usage_list_dict.append({"namespace": usage_line_items[items_counter][0],
+                                            "pod": usage_line_items[items_counter][1],
+                                            "node": usage_line_items[items_counter][2],
+                                            "pod_usage_cpu_core_seconds": usage_line_items[items_counter][3],
+                                            "pod_request_cpu_core_seconds": usage_line_items[items_counter][4],
+                                            "pod_limit_cpu_core_seconds": usage_line_items[items_counter][5],
+                                            "pod_usage_memory_byte_seconds": usage_line_items[items_counter][6],
+                                            "pod_request_memory_byte_seconds": usage_line_items[items_counter][7],
+                                            "pod_limit_memory_byte_seconds": usage_line_items[items_counter][8],
+                                            "node_capacity_cpu_core_seconds": usage_line_items[items_counter][9],
+                                            "node_capacity_memory_bytes": usage_line_items[items_counter][10],
+                                            "node_capacity_cpu_cores": usage_line_items[items_counter][11],
+                                            "node_capacity_memory_byte_seconds": usage_line_items[items_counter][12],
+                                            "pod_labels": usage_line_items[items_counter][13],
+                                            "resource_id": usage_line_items[items_counter][14],
+                                            "interval_start": report_items[items_counter][0],
+                                            "cluster_id": report_period_items[report_counter][0]})
                 items_counter += 1
 
         print("All Raw vs Daily tests have passed!")
 
-        # database test between daily and daily_summary reporting tables
+        # database test between daily and daily_summary reporting tables for usage and storage
         start_interval, end_interval = (self.get_time_interval())
         today = self.get_today_date().date()
         if end_interval == today:
@@ -238,23 +491,23 @@ class OCPDailyTest(MasuTestCase):
                  "persistentvolumeclaim_capacity_gigabyte_months", "volume_request_storage_gigabyte_months",
                  "persistentvolumeclaim_usage_gigabyte_months"], date_val)
 
-            persistentvolumeclaim_capacity_gigabyte = float(daily_storage[0][2]) * (2 ** (-30))
-            persistentvolumeclaim_capacity_gigabyte_months = float(daily_storage[0][3]) / 86400 * \
-                                                             monthrange(parse_date.year, parse_date.month)[1] * (
-                                                                         2 ** (-30))
-            volume_request_storage_gigabyte_months = float(daily_storage[0][4]) / 86400 * \
-                                                     monthrange(parse_date.year, parse_date.month)[1] * (2 ** (-30))
-            persistentvolumeclaim_usage_gigabyte_months = float(daily_storage[0][5]) / 86400 * \
-                                                          monthrange(parse_date.year, parse_date.month)[1] * (
-                                                                      2 ** (-30))
+            cap_giga = float(daily_storage[0][2]) * (2 ** (-30))
+            cap_giga_months = float(daily_storage[0][3]) / 86400 * \
+                              monthrange(parse_date.year, parse_date.month)[1] * (
+                                      2 ** (-30))
+            storage_giga_months = float(daily_storage[0][4]) / 86400 * \
+                                  monthrange(parse_date.year, parse_date.month)[1] * (2 ** (-30))
+            usage_giga_months = float(daily_storage[0][5]) / 86400 * \
+                                monthrange(parse_date.year, parse_date.month)[1] * (
+                                        2 ** (-30))
 
             labels = dict(daily_storage[0][0])
             labels.update(daily_storage[0][1])
             self.assertEqual(labels, daily_summary_storage[0][0])
-            self.assertEqual(persistentvolumeclaim_capacity_gigabyte, daily_summary_storage[0][1])
-            self.assertEqual(persistentvolumeclaim_capacity_gigabyte_months, daily_summary_storage[0][2])
-            self.assertEqual(volume_request_storage_gigabyte_months, daily_summary_storage[0][3])
-            self.assertEqual(persistentvolumeclaim_usage_gigabyte_months, daily_summary_storage[0][4])
+            self.assertEqual(cap_giga, daily_summary_storage[0][1])
+            self.assertEqual(cap_giga_months, daily_summary_storage[0][2])
+            self.assertEqual(storage_giga_months, daily_summary_storage[0][3])
+            self.assertEqual(usage_giga_months, daily_summary_storage[0][4])
 
             daily_usage = self.get_ocp_daily_db_accessor(
                 OCP_REPORT_TABLE_MAP['line_item_daily'],
@@ -288,10 +541,10 @@ class OCPDailyTest(MasuTestCase):
             self.assertEqual(float(daily_usage[0][10]) / 3600 * (2 ** (-30)), daily_summary_usage[0][10])
             self.assertEqual(float(daily_usage[0][11]) / 3600, daily_summary_usage[0][11])
             self.assertEqual(float(daily_usage[0][12]) / 3600 * (2 ** (-30)), daily_summary_usage[0][12])
-            print("Daily vs Daily Summary tests have passed!")
+            print("OCP Daily vs Daily Summary tests have passed!")
 
-        print("All Daily vs Daily Summary tests have passed!")
-        print("All database tests have passed!")
+        print("All OCP Daily vs Daily Summary tests have passed!")
+        print("All OCP reporting database tests have passed!")
 
 
 # test script
