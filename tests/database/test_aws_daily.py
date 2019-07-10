@@ -189,13 +189,16 @@ class AWSDailyTest(MasuTestCase):
     def test_comparison_db_accessor(self):
         # database test between raw and daily reporting tables
         count = self.table_select(AWS_CUR_TABLE_MAP['line_item'], "count(*)")[0][0]
+
+        # get aws line item fields
         line_items = self.get_aws_line_item(
             AWS_CUR_TABLE_MAP['line_item'],
             ["cost_entry_bill_id", "cost_entry_product_id", "cost_entry_pricing_id", "cost_entry_reservation_id",
              "resource_id", "line_item_type", "usage_account_id", "usage_type", "availability_zone",
              "tax_type", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
-             "blended_cost",
-             "public_on_demand_cost", "public_on_demand_rate", "usage_start"])
+             "blended_cost", "public_on_demand_cost", "public_on_demand_rate", "usage_start"])
+
+        # initialize list of dictionaries to store each unique line item
         list_dict = [{"cost_entry_bill_id": line_items[0][0], "cost_entry_product_id": line_items[0][1],
                       "cost_entry_pricing_id": line_items[0][2],
                       "cost_entry_reservation_id": line_items[0][3],
@@ -209,19 +212,26 @@ class AWSDailyTest(MasuTestCase):
                       "blended_cost": line_items[0][15], "public_on_demand_cost": line_items[0][16],
                       "public_on_demand_rate": line_items[0][17],
                       "usage_start": line_items[0][18]}]
+
+        # counter to keep iterate through length of list_dict
         daily_counter = 0
+        # get current date of first line item
         curr_date = line_items[0][18].date()
         print(curr_date)
+        # index of aws line items
         items_counter = 1
 
+        # iterate through all line items based on count value of reporting table
         while items_counter < count:
             # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != line_items[items_counter][18].date():
+                # get aws usage daily fields
                 daily_values = self.get_aws_daily_db_accessor(
                     AWS_CUR_TABLE_MAP['line_item_daily'],
                     ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
                      "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], curr_date)
 
+                # assertion between the total summation of line item values and daily values for the current date
                 while daily_counter < len(list_dict):
                     self.assertEqual(list_dict[daily_counter]["usage_amount"], daily_values[daily_counter][2])
                     self.assertEqual(list_dict[daily_counter]["unblended_rate"], daily_values[daily_counter][3])
@@ -231,9 +241,13 @@ class AWSDailyTest(MasuTestCase):
                     self.assertEqual(list_dict[daily_counter]["public_on_demand_cost"], daily_values[daily_counter][7])
                     self.assertEqual(list_dict[daily_counter]["public_on_demand_rate"], daily_values[daily_counter][8])
                     daily_counter += 1
-                print("Raw vs Daily tests have passed!")
+                    print("AWS Raw vs Daily tests have passed!")
+
+                # get current date of line item
                 curr_date = line_items[items_counter][18].date()
                 print(curr_date)
+
+                # re-initialize list of dictionaries with new line item and repeat while loop
                 list_dict = [{"cost_entry_bill_id": line_items[items_counter][0],
                               "cost_entry_product_id": line_items[items_counter][1],
                               "cost_entry_pricing_id": line_items[items_counter][2],
@@ -257,10 +271,15 @@ class AWSDailyTest(MasuTestCase):
 
             # else, continue to sum and max fields for next hour of current day
             else:
+                # counter for iterating through usage_list_dict (if it is length > 1)
                 dict_counter = 0
+                # flag to indicate that fields of next line item match an entry in our usage_list_dict and values
+                # are summed or maxed appropriately
                 flag = 0
 
+                # iterate through usage_list_dict entries (usually only one line item bc database is sorted by date)
                 while dict_counter < len(list_dict):
+                    # check if group by fields match
                     if (list_dict[dict_counter]["cost_entry_bill_id"] == line_items[items_counter][0] and
                             list_dict[dict_counter]["cost_entry_product_id"] == line_items[items_counter][1] and
                             list_dict[dict_counter]["cost_entry_pricing_id"] == line_items[items_counter][2] and
@@ -273,6 +292,8 @@ class AWSDailyTest(MasuTestCase):
                             list_dict[dict_counter]["tax_type"] == line_items[items_counter][9] and
                             list_dict[dict_counter]["product_code"] == line_items[items_counter][10] and
                             list_dict[dict_counter]["usage_start"].date() == line_items[items_counter][18].date()):
+
+                        # sum or max values based on database line item to daily report processing
                         usage_amount = list_dict[dict_counter]["usage_amount"] + line_items[items_counter][11]
                         unblended_rate = max(list_dict[dict_counter]["unblended_rate"], line_items[items_counter][12])
                         unblended_cost = list_dict[dict_counter]["unblended_cost"] + line_items[items_counter][13]
@@ -282,6 +303,8 @@ class AWSDailyTest(MasuTestCase):
                                                 line_items[items_counter][16]
                         public_on_demand_rate = max(list_dict[dict_counter]["public_on_demand_rate"],
                                                     line_items[items_counter][17])
+
+                        # update the usage_list_dict entry
                         dic_entry_temp = {"usage_amount": usage_amount, "unblended_rate": unblended_rate,
                                           "unblended_cost": unblended_cost, "blended_rate": blended_rate,
                                           "blended_cost": blended_cost,
@@ -292,6 +315,8 @@ class AWSDailyTest(MasuTestCase):
                         break
                     dict_counter += 1
 
+                # unusual case: if set of fields did not match any existing entries in dictionaries, then create new
+                # entry within usage_list_dict
                 if flag == 0:
                     list_dict.append({"cost_entry_bill_id": line_items[items_counter][0],
                                       "cost_entry_product_id": line_items[items_counter][1],
@@ -358,10 +383,10 @@ class AWSDailyTest(MasuTestCase):
             self.assertEqual(blended_cost_sum, daily_summary_values[0][7])
             self.assertEqual(public_on_demand_cost_sum, daily_summary_values[0][8])
             self.assertEqual(public_on_demand_rate_max, daily_summary_values[0][9])
-            print("Daily vs Daily Summary tests have passed!")
+            print("AWS Daily vs Daily Summary tests have passed!")
 
-        print("All Daily vs Daily Summary tests have passed!")
-        print("All database tests have passed!")
+        print("All AWS Daily vs Daily Summary tests have passed!")
+        print("All AWS reporting database tests have passed!")
 
 
 # test script
