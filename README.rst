@@ -93,14 +93,16 @@ To gain direct access to the Koku database running on OpenShift, port forwarding
 Running Tests
 =============
 Access the provided google doc and follow the steps to trigger a masu ingestion for both OCP and AWS provider reporting cost/usage data. This walkthrough will create nise-generated mock reports in order to test the summarization of data:
-`Generating and Ingesting Nise Data <https://docs.google.com/document/d/1r6YY9XOv-FeUVuZgY-XPiwCIqLr-sjCeATz4s7xaCH0/edit#heading=h.9om7w2vhdvf6>`
+
+[Generating and Ingesting Nise Data](https://docs.google.com/document/d/1r6YY9XOv-FeUVuZgY-XPiwCIqLr-sjCeATz4s7xaCH0/edit#heading=h.9om7w2vhdvf6 "Generating and Ingesting Nise Data")
 
 To test the database values for "raw line item vs. daily" and "daily vs. daily summary tables", run the following python script commands as a module to avoid import errors:
+
 ``python -m tests.database.test_aws_daily``
 ``python -m tests.database.test_ocp_daily``
 
 Local and Mixed Development
----------------------------
+===========================
 There are several ways to run Masu components. Depending on your development needs, it may be useful to run some or all of Masu's components locally, outside of an OpenShift environment. This section will provide some examples of possible ways to deploy Masu for development purposes. This is intended to provide ideas. It is not an exhaustive or complete list of possibilities.
 
 1. Run everything inside OpenShift. ::
