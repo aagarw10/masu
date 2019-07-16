@@ -54,7 +54,7 @@ class OCPDailyTest(MasuTestCase):
         return datetime.datetime.now().replace(microsecond=0, second=0, minute=0)
 
     # Helper raw SQL function to select column data from table with optional query values of row and order by
-    def table_select(self, table_name, columns=None, rows=None, order_by=None):
+    def table_select_raw_sql(self, table_name, columns=None, rows=None, order_by=None):
         command = ""
         if columns is not None:
             command = "SELECT {} FROM {};".format(str(columns), str(table_name))
@@ -67,10 +67,10 @@ class OCPDailyTest(MasuTestCase):
         return data
 
     def get_time_interval(self):
-        asc_data = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None,
-                                     "usage_start ASC")
-        desc_data = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None,
-                                      "usage_start DESC")
+        asc_data = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None,
+                                             "usage_start ASC")
+        desc_data = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['storage_line_item_daily'], "usage_start", None,
+                                              "usage_start DESC")
         start_interval = asc_data[0][0].date()
         end_interval = desc_data[0][0].date()
         return start_interval, end_interval
@@ -85,45 +85,36 @@ class OCPDailyTest(MasuTestCase):
         end = "\'" + str(date_val) + " 23:59:59+00\'"
         return start, end
 
-    def get_ocp_line_item(self, table_name, columns):
+    def table_select(self, table_name, columns):
         query = self.accessor._get_db_obj_query(
             table_name, columns)
         return query
 
-    # OCP resource daily usage/cost data via DB accessor query
-    def get_ocp_daily_db_accessor(self, table_name, columns, date_val):
+    # OCP resource daily and daily summary usage/cost data via DB accessor query
+    def table_select_by_date(self, table_name, columns, date_val):
         usage_start, usage_end = self.get_datetime(date_val)
         query = self.accessor._get_db_obj_query(
             table_name, columns)
         query_by_date = query.filter_by(usage_start=usage_start)
         return query_by_date
 
-    # OCP resource daily summary usage/cost data via DB accessor query
-    def get_ocp_daily_summary_db_accessor(self, table_name, columns, date_val):
-        usage_start, usage_end = self.get_datetime(date_val)
-        query = self.accessor._get_db_obj_query(
-            table_name, columns)
-        query_by_date = query.filter_by(usage_start=usage_start)
-        return query_by_date
-
-    # Main test function
-    # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
-    def test_comparison_db_accessor(self):
+    # Assert raw line item and daily values for OCP storage are correct based on DB accessor queries using SQLAlchemy
+    def test_storage_line_item_to_daily(self):
         # database test between STORAGE raw and daily reporting tables
-        count = self.table_select(OCP_REPORT_TABLE_MAP['storage_line_item'], "count(*)")[0][0]
+        count = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['storage_line_item'], "count(*)")[0][0]
 
         # ocp storage start datetime field
-        report_items = self.get_ocp_line_item(
+        report_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report'],
             ["interval_start"])
 
         # time interval used to check cluster id
-        report_period_items = self.get_ocp_line_item(
+        report_period_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report_period'],
             ["cluster_id", "report_period_start", "report_period_end"])
 
         # get ocp storage line item fields
-        storage_line_items = self.get_ocp_line_item(
+        storage_line_items = self.table_select(
             OCP_REPORT_TABLE_MAP['storage_line_item'],
             ["namespace", "pod", "persistentvolumeclaim", "persistentvolume",
              "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
@@ -157,7 +148,7 @@ class OCPDailyTest(MasuTestCase):
             # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != report_items[items_counter][0].date():
                 # get ocp storage daily fields
-                daily_storage = self.get_ocp_daily_db_accessor(
+                daily_storage = self.table_select_by_date(
                     OCP_REPORT_TABLE_MAP['storage_line_item_daily'],
                     ["cluster_id", "namespace", "pod", "persistentvolumeclaim", "persistentvolume",
                      "storageclass", "persistentvolumeclaim_capacity_bytes",
@@ -269,21 +260,23 @@ class OCPDailyTest(MasuTestCase):
                                               "cluster_id": report_period_items[report_counter][0]})
                 items_counter += 1
 
+    # Assert raw line item and daily values for OCP usage are correct based on DB accessor queries using SQLAlchemy
+    def test_usage_line_item_to_daily(self):
         # database test between USAGE raw and daily reporting tables
-        count = self.table_select(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
+        count = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
 
         # ocp usage start datetime field
-        report_items = self.get_ocp_line_item(
+        report_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report'],
             ["interval_start"])
 
         # time interval used to check cluster id
-        report_period_items = self.get_ocp_line_item(
+        report_period_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report_period'],
             ["cluster_id", "report_period_start", "report_period_end"])
 
         # get ocp usage line item fields
-        usage_line_items = self.get_ocp_line_item(
+        usage_line_items = self.table_select(
             OCP_REPORT_TABLE_MAP['line_item'],
             ["namespace", "pod", "node", "pod_usage_cpu_core_seconds", "pod_request_cpu_core_seconds",
              "pod_limit_cpu_core_seconds", "pod_usage_memory_byte_seconds",
@@ -320,7 +313,7 @@ class OCPDailyTest(MasuTestCase):
             # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != report_items[items_counter][0].date():
                 # get ocp usage daily fields
-                daily_usage = self.get_ocp_daily_db_accessor(
+                daily_usage = self.table_select_by_date(
                     OCP_REPORT_TABLE_MAP['line_item_daily'],
                     ["cluster_id", "namespace", "pod", "node", "pod_usage_cpu_core_seconds",
                      "pod_request_cpu_core_seconds",
@@ -472,6 +465,8 @@ class OCPDailyTest(MasuTestCase):
 
         print("All Raw vs Daily tests have passed!")
 
+    # Assert daily and daily summary values are correct based on DB accessor queries using SQLAlchemy
+    def test_daily_to_summary(self):
         # database test between daily and daily_summary reporting tables for usage and storage
         start_interval, end_interval = (self.get_time_interval())
         today = self.get_today_date().date()
@@ -480,12 +475,12 @@ class OCPDailyTest(MasuTestCase):
         for date_val in self.date_range(start_interval, end_interval):
             print("Date: " + str(date_val))
             parse_date = datetime.datetime.strptime(str(date_val), "%Y-%m-%d")
-            daily_storage = self.get_ocp_daily_db_accessor(
+            daily_storage = self.table_select_by_date(
                 OCP_REPORT_TABLE_MAP['storage_line_item_daily'],
                 ["persistentvolume_labels", "persistentvolumeclaim_labels", "persistentvolumeclaim_capacity_bytes",
                  "persistentvolumeclaim_capacity_byte_seconds", "volume_request_storage_byte_seconds",
                  "persistentvolumeclaim_usage_byte_seconds"], date_val)
-            daily_summary_storage = self.get_ocp_daily_summary_db_accessor(
+            daily_summary_storage = self.table_select_by_date(
                 OCP_REPORT_TABLE_MAP['storage_line_item_daily_summary'],
                 ["volume_labels", "persistentvolumeclaim_capacity_gigabyte",
                  "persistentvolumeclaim_capacity_gigabyte_months", "volume_request_storage_gigabyte_months",
@@ -509,7 +504,7 @@ class OCPDailyTest(MasuTestCase):
             self.assertEqual(storage_giga_months, daily_summary_storage[0][3])
             self.assertEqual(usage_giga_months, daily_summary_storage[0][4])
 
-            daily_usage = self.get_ocp_daily_db_accessor(
+            daily_usage = self.table_select_by_date(
                 OCP_REPORT_TABLE_MAP['line_item_daily'],
                 ["pod_usage_cpu_core_seconds", "pod_request_cpu_core_seconds",
                  "pod_limit_cpu_core_seconds", "pod_usage_memory_byte_seconds",
@@ -518,7 +513,7 @@ class OCPDailyTest(MasuTestCase):
                  "node_capacity_memory_byte_seconds", "cluster_capacity_cpu_core_seconds",
                  "cluster_capacity_memory_byte_seconds", "total_capacity_cpu_core_seconds",
                  "total_capacity_memory_byte_seconds"], date_val)
-            daily_summary_usage = self.get_ocp_daily_summary_db_accessor(
+            daily_summary_usage = self.table_select_by_date(
                 OCP_REPORT_TABLE_MAP['line_item_daily_summary'],
                 ["pod_usage_cpu_core_hours", "pod_request_cpu_core_hours",
                  "pod_limit_cpu_core_hours", "pod_usage_memory_gigabyte_hours",
@@ -550,5 +545,7 @@ class OCPDailyTest(MasuTestCase):
 # test script
 psql = OCPDailyTest()
 psql.setUp()
-psql.test_comparison_db_accessor()
+psql.test_usage_line_item_to_daily()
+psql.test_storage_line_item_to_daily()
+psql.test_daily_to_summary()
 psql.tearDown()

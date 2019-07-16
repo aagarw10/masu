@@ -54,7 +54,7 @@ class AWSDailyTest(MasuTestCase):
         return datetime.datetime.now().replace(microsecond=0, second=0, minute=0)
 
     # Helper raw SQL function to select column data from table with optional query values of row and order by
-    def table_select(self, table_name, columns=None, rows=None, order_by=None):
+    def table_select_raw_sql(self, table_name, columns=None, rows=None, order_by=None):
         command = ""
         if columns is not None:
             command = "SELECT {} FROM {};".format(str(columns), str(table_name))
@@ -67,8 +67,8 @@ class AWSDailyTest(MasuTestCase):
         return data
 
     def get_time_interval(self, table_name):
-        asc_data = self.table_select(table_name, "usage_start", None, "usage_start ASC")
-        desc_data = self.table_select(table_name, "usage_start", None, "usage_start DESC")
+        asc_data = self.table_select_raw_sql(table_name, "usage_start", None, "usage_start ASC")
+        desc_data = self.table_select_raw_sql(table_name, "usage_start", None, "usage_start DESC")
         start_interval = asc_data[0][0].date()
         end_interval = desc_data[0][0].date()
         return start_interval, end_interval
@@ -82,15 +82,10 @@ class AWSDailyTest(MasuTestCase):
         start = "\'" + str(date_val) + " 00:00:00+00\'"
         return start
 
-    def get_aws_line_item(self, table_name, columns):
-        query = self.accessor._get_db_obj_query(
-            table_name, columns)
-        return query
-
     # AWS resource daily usage/cost data via raw SQL query (psycopg2)
-    def get_aws_daily_raw(self, table_name, date_val):
+    def get_aws_daily_raw(self, date_val):
         usage_start, usage_end = self.get_datetime(date_val)
-        daily_data = np.array(self.table_select(table_name, "id, product_code, usage_amount, unblended_rate,"
+        daily_data = np.array(self.table_select_raw_sql(AWS_CUR_TABLE_MAP['line_item_daily'], "id, product_code, usage_amount, unblended_rate,"
                                                             "unblended_cost, blended_rate, blended_cost, public_on_demand_cost, public_on_demand_rate",
                                                 "usage_start >= " + usage_start + " AND usage_end <= " + usage_end))
         values_list = []
@@ -112,9 +107,9 @@ class AWSDailyTest(MasuTestCase):
         return values_list
 
     # AWS resource daily summary usage/cost data via raw SQL query (psycopg2)
-    def get_aws_daily_summary_raw(self, table_name, date_val):
+    def get_aws_daily_summary_raw(self, date_val):
         usage_start, usage_end = self.get_datetime(date_val)
-        daily_data = self.table_select(table_name, "id, product_code, resource_count, usage_amount,"
+        daily_data = self.table_select_raw_sql(AWS_CUR_TABLE_MAP['line_item_daily_summary'], "id, product_code, resource_count, usage_amount,"
                                                    "unblended_rate, unblended_cost, blended_rate, blended_cost, public_on_demand_cost,"
                                                    "public_on_demand_rate",
                                        "usage_start >= " + usage_start + " AND usage_end <= " + usage_end)
@@ -134,64 +129,26 @@ class AWSDailyTest(MasuTestCase):
             }
         return values
 
-    # AWS resource daily usage/cost data via DB accessor query
-    def get_aws_daily_db_accessor(self, table_name, columns, date_val):
+    def table_select(self, table_name, columns):
+        query = self.accessor._get_db_obj_query(
+            table_name, columns)
+        return query
+
+    # AWS resource daily and daily summary sage/cost data via DB accessor query
+    def table_select_by_date(self, table_name, columns, date_val):
         usage_start = self.get_datetime(date_val)
         query = self.accessor._get_db_obj_query(
             table_name, columns)
         query_by_date = query.filter_by(usage_start=usage_start)
         return query_by_date
 
-    # AWS resource daily summary usage/cost data via DB accessor query
-    def get_aws_daily_summary_db_accessor(self, table_name, columns, date_val):
-        usage_start = self.get_datetime(date_val)
-        query = self.accessor._get_db_obj_query(
-            table_name, columns)
-        query_by_date = query.filter_by(usage_start=usage_start)
-        return query_by_date
-
-    # Assert daily and daily_summary values are correct based on raw SQL queries from PostgreSQL
-    def test_comparison_raw(self):
-        start_interval, end_interval = (self.get_time_interval())
-        for date_val in self.date_range(start_interval, end_interval):
-            print("Date: " + str(date_val))
-            daily_values = self.get_aws_daily_raw(AWS_CUR_TABLE_MAP['line_item_daily'], date_val)
-            daily_summary_values = self.get_aws_daily_summary_raw(AWS_CUR_TABLE_MAP['line_item_daily_summary'],
-                                                                  date_val)
-            num_resources = daily_summary_values["resource_count"]
-            usage_cost_sum, unblended_cost_sum, blended_cost_sum, public_on_demand_cost_sum = 0, 0, 0, 0
-            unblended_rate_max, blended_rate_max, public_on_demand_rate_max = 0, 0, 0
-            counter = 0
-            while counter < num_resources:
-                usage_cost_sum += daily_values[counter]["usage_amount"]
-                unblended_cost_sum += daily_values[counter]["unblended_cost"]
-                blended_cost_sum += daily_values[counter]["blended_cost"]
-                public_on_demand_cost_sum += daily_values[counter]["public_on_demand_cost"]
-                if daily_values[counter]["unblended_rate"] > unblended_rate_max:
-                    unblended_rate_max = daily_values[counter]["unblended_rate"]
-                if daily_values[counter]["blended_rate"] > blended_rate_max:
-                    blended_rate_max = daily_values[counter]["blended_rate"]
-                if daily_values[counter]["public_on_demand_rate"] > public_on_demand_rate_max:
-                    public_on_demand_rate_max = daily_values[counter]["public_on_demand_rate"]
-                counter += 1
-
-            self.assertEqual(usage_cost_sum, daily_summary_values["usage_amount"])
-            self.assertEqual(unblended_rate_max, daily_summary_values["unblended_rate"])
-            self.assertEqual(unblended_cost_sum, daily_summary_values["unblended_cost"])
-            self.assertEqual(blended_rate_max, daily_summary_values["blended_rate"])
-            self.assertEqual(blended_cost_sum, daily_summary_values["blended_cost"])
-            self.assertEqual(public_on_demand_cost_sum, daily_summary_values["public_on_demand_cost"])
-            self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
-            print("Raw SQL tests have passed!")
-
-    # Main test function
-    # Assert raw, daily, and daily_summary values are correct based on DB accessor queries using SQLAlchemy
-    def test_comparison_db_accessor(self):
+    # Assert raw line item and daily values are correct based on DB accessor queries using SQLAlchemy
+    def test_line_item_to_daily(self):
         # database test between raw and daily reporting tables
-        count = self.table_select(AWS_CUR_TABLE_MAP['line_item'], "count(*)")[0][0]
+        count = self.table_select_raw_sql(AWS_CUR_TABLE_MAP['line_item'], "count(*)")[0][0]
 
         # get aws line item fields
-        line_items = self.get_aws_line_item(
+        line_items = self.table_select(
             AWS_CUR_TABLE_MAP['line_item'],
             ["cost_entry_bill_id", "cost_entry_product_id", "cost_entry_pricing_id", "cost_entry_reservation_id",
              "resource_id", "line_item_type", "usage_account_id", "usage_type", "availability_zone",
@@ -226,7 +183,7 @@ class AWSDailyTest(MasuTestCase):
             # if current date needs to be iterated forward, then assert field comparison between raw and daily first
             if curr_date != line_items[items_counter][18].date():
                 # get aws usage daily fields
-                daily_values = self.get_aws_daily_db_accessor(
+                daily_values = self.table_select_by_date(
                     AWS_CUR_TABLE_MAP['line_item_daily'],
                     ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
                      "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], curr_date)
@@ -341,6 +298,41 @@ class AWSDailyTest(MasuTestCase):
 
         print("All Raw vs Daily tests have passed!")
 
+    # Assert daily and daily_summary values are correct based on raw SQL queries from PostgreSQL
+    def test_daily_to_summary_raw_sql(self):
+        start_interval, end_interval = (self.get_time_interval())
+        for date_val in self.date_range(start_interval, end_interval):
+            print("Date: " + str(date_val))
+            daily_values = self.get_aws_daily_raw(date_val)
+            daily_summary_values = self.get_aws_daily_summary_raw(date_val)
+            num_resources = daily_summary_values["resource_count"]
+            usage_cost_sum, unblended_cost_sum, blended_cost_sum, public_on_demand_cost_sum = 0, 0, 0, 0
+            unblended_rate_max, blended_rate_max, public_on_demand_rate_max = 0, 0, 0
+            counter = 0
+            while counter < num_resources:
+                usage_cost_sum += daily_values[counter]["usage_amount"]
+                unblended_cost_sum += daily_values[counter]["unblended_cost"]
+                blended_cost_sum += daily_values[counter]["blended_cost"]
+                public_on_demand_cost_sum += daily_values[counter]["public_on_demand_cost"]
+                if daily_values[counter]["unblended_rate"] > unblended_rate_max:
+                    unblended_rate_max = daily_values[counter]["unblended_rate"]
+                if daily_values[counter]["blended_rate"] > blended_rate_max:
+                    blended_rate_max = daily_values[counter]["blended_rate"]
+                if daily_values[counter]["public_on_demand_rate"] > public_on_demand_rate_max:
+                    public_on_demand_rate_max = daily_values[counter]["public_on_demand_rate"]
+                counter += 1
+
+            self.assertEqual(usage_cost_sum, daily_summary_values["usage_amount"])
+            self.assertEqual(unblended_rate_max, daily_summary_values["unblended_rate"])
+            self.assertEqual(unblended_cost_sum, daily_summary_values["unblended_cost"])
+            self.assertEqual(blended_rate_max, daily_summary_values["blended_rate"])
+            self.assertEqual(blended_cost_sum, daily_summary_values["blended_cost"])
+            self.assertEqual(public_on_demand_cost_sum, daily_summary_values["public_on_demand_cost"])
+            self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
+            print("Raw SQL tests have passed!")
+
+    # Assert daily and daily summary values are correct based on DB accessor queries using SQLAlchemy
+    def test_daily_to_summary(self):
         # database test between daily and daily_summary reporting tables
         start_interval, end_interval = (self.get_time_interval(AWS_CUR_TABLE_MAP['line_item_daily']))
         today = self.get_today_date().date()
@@ -348,11 +340,11 @@ class AWSDailyTest(MasuTestCase):
             end_interval = today
         for date_val in self.date_range(start_interval, end_interval):
             print("Date: " + str(date_val))
-            daily_values = self.get_aws_daily_db_accessor(
+            daily_values = self.table_select_by_date(
                 AWS_CUR_TABLE_MAP['line_item_daily'],
                 ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
                  "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], date_val)
-            daily_summary_values = self.get_aws_daily_summary_db_accessor(
+            daily_summary_values = self.table_select_by_date(
                 AWS_CUR_TABLE_MAP['line_item_daily_summary'],
                 ["id", "product_code", "resource_count", "usage_amount", "unblended_rate", "unblended_cost",
                  "blended_rate", "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], date_val)
@@ -392,6 +384,7 @@ class AWSDailyTest(MasuTestCase):
 # test script
 psql = AWSDailyTest()
 psql.setUp()
-# psql.test_comparison_raw()
-psql.test_comparison_db_accessor()
+# psql.test_daily_to_summary_raw_sql()
+psql.test_line_item_to_daily()
+psql.test_daily_to_summary()
 psql.tearDown()
