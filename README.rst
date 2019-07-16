@@ -70,6 +70,15 @@ Our development and deployment targets center around running Masu on `OpenShift 
 
 Run ``oc cluster up`` once before running the ``make`` commands to generate the referenced config file.
 
+Running Tests
+=============
+Access the provided google doc and follow the steps to trigger a masu ingestion for both OCP and AWS provider reporting cost/usage data. This walkthrough will create nise-generated mock reports in order to test the summarization of data:
+https://docs.google.com/document/d/1r6YY9XOv-FeUVuZgY-XPiwCIqLr-sjCeATz4s7xaCH0/edit#heading=h.9om7w2vhdvf6
+
+To test the database values for "raw line item vs. daily" and "daily vs. daily summary tables", run the following python script commands as a module to avoid import errors:
+``python -m tests.database.test_aws_daily``
+``python -m tests.database.test_ocp_daily``
+
 Tab Completion
 **************
 The Openshift CLI does offer shell/tab completion. It can be generated for either bash/zsh and is available by running `oc completion bash|zsh` The following example generates a shell script for completion and sources the file.  ::
