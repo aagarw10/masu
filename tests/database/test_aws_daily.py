@@ -147,6 +147,9 @@ class AWSDailyTest(MasuTestCase):
         # database test between raw and daily reporting tables
         count = self.table_select_raw_sql(AWS_CUR_TABLE_MAP['line_item'], "count(*)")[0][0]
 
+        if count == 0:
+            self.fail("AWS line item reporting table is empty")
+
         # get aws line item fields
         line_items = self.table_select(
             AWS_CUR_TABLE_MAP['line_item'],
@@ -154,6 +157,9 @@ class AWSDailyTest(MasuTestCase):
              "resource_id", "line_item_type", "usage_account_id", "usage_type", "availability_zone",
              "tax_type", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
              "blended_cost", "public_on_demand_cost", "public_on_demand_rate", "usage_start"])
+
+        if line_items.count() == 0:
+            self.fail("AWS line item reporting table is empty")
 
         # initialize list of dictionaries to store each unique line item
         list_dict = [{"cost_entry_bill_id": line_items[0][0], "cost_entry_product_id": line_items[0][1],
@@ -188,17 +194,24 @@ class AWSDailyTest(MasuTestCase):
                     ["id", "product_code", "usage_amount", "unblended_rate", "unblended_cost", "blended_rate",
                      "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], curr_date)
 
+                if daily_values.count() == 0:
+                    self.fail("AWS daily reporting table is empty")
+
                 # assertion between the total summation of line item values and daily values for the current date
                 while daily_counter < len(list_dict):
-                    self.assertEqual(list_dict[daily_counter]["usage_amount"], daily_values[daily_counter][2])
-                    self.assertEqual(list_dict[daily_counter]["unblended_rate"], daily_values[daily_counter][3])
-                    self.assertEqual(list_dict[daily_counter]["unblended_cost"], daily_values[daily_counter][4])
-                    self.assertEqual(list_dict[daily_counter]["blended_rate"], daily_values[daily_counter][5])
-                    self.assertEqual(list_dict[daily_counter]["blended_cost"], daily_values[daily_counter][6])
-                    self.assertEqual(list_dict[daily_counter]["public_on_demand_cost"], daily_values[daily_counter][7])
-                    self.assertEqual(list_dict[daily_counter]["public_on_demand_rate"], daily_values[daily_counter][8])
-                    daily_counter += 1
-                    print("AWS Raw vs Daily tests have passed!")
+                    try:
+                        self.assertEqual(list_dict[daily_counter]["usage_amount"], daily_values[daily_counter][2])
+                        self.assertEqual(list_dict[daily_counter]["unblended_rate"], daily_values[daily_counter][3])
+                        self.assertEqual(list_dict[daily_counter]["unblended_cost"], daily_values[daily_counter][4])
+                        self.assertEqual(list_dict[daily_counter]["blended_rate"], daily_values[daily_counter][5])
+                        self.assertEqual(list_dict[daily_counter]["blended_cost"], daily_values[daily_counter][6])
+                        self.assertEqual(list_dict[daily_counter]["public_on_demand_cost"], daily_values[daily_counter][7])
+                        self.assertEqual(list_dict[daily_counter]["public_on_demand_rate"], daily_values[daily_counter][8])
+                        daily_counter += 1
+                        print("AWS Raw vs Daily tests have passed!")
+                    except AssertionError as error:
+                        print(error)
+                        self.fail("Test assertion for " + str(curr_date) + " has failed")
 
                 # get current date of line item
                 curr_date = line_items[items_counter][18].date()
@@ -322,14 +335,18 @@ class AWSDailyTest(MasuTestCase):
                     public_on_demand_rate_max = daily_values[counter]["public_on_demand_rate"]
                 counter += 1
 
-            self.assertEqual(usage_cost_sum, daily_summary_values["usage_amount"])
-            self.assertEqual(unblended_rate_max, daily_summary_values["unblended_rate"])
-            self.assertEqual(unblended_cost_sum, daily_summary_values["unblended_cost"])
-            self.assertEqual(blended_rate_max, daily_summary_values["blended_rate"])
-            self.assertEqual(blended_cost_sum, daily_summary_values["blended_cost"])
-            self.assertEqual(public_on_demand_cost_sum, daily_summary_values["public_on_demand_cost"])
-            self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
-            print("Raw SQL tests have passed!")
+            try:
+                self.assertEqual(usage_cost_sum, daily_summary_values["usage_amount"])
+                self.assertEqual(unblended_rate_max, daily_summary_values["unblended_rate"])
+                self.assertEqual(unblended_cost_sum, daily_summary_values["unblended_cost"])
+                self.assertEqual(blended_rate_max, daily_summary_values["blended_rate"])
+                self.assertEqual(blended_cost_sum, daily_summary_values["blended_cost"])
+                self.assertEqual(public_on_demand_cost_sum, daily_summary_values["public_on_demand_cost"])
+                self.assertEqual(public_on_demand_rate_max, daily_summary_values["public_on_demand_rate"])
+                print("Raw SQL tests have passed!")
+            except AssertionError as error:
+                print(error)
+                self.fail("Test assertion for " + str(date_val) + " has failed")
 
     # Assert daily and daily summary values are correct based on DB accessor queries using SQLAlchemy
     def test_daily_to_summary(self):
@@ -348,9 +365,18 @@ class AWSDailyTest(MasuTestCase):
                 AWS_CUR_TABLE_MAP['line_item_daily_summary'],
                 ["id", "product_code", "resource_count", "usage_amount", "unblended_rate", "unblended_cost",
                  "blended_rate", "blended_cost", "public_on_demand_cost", "public_on_demand_rate"], date_val)
-            num_resources = daily_summary_values[0][2]
             daily_count = daily_values.count()
-            self.assertEqual(daily_count, num_resources)
+            if daily_count == 0:
+                self.fail("AWS daily reporting table is empty")
+            num_resources = daily_summary_values[0][2]
+            if num_resources == 0 or daily_summary_values.count() == 0:
+                self.fail("AWS daily summary reporting table is empty")
+
+            try:
+                self.assertEqual(daily_count, num_resources)
+            except AssertionError as error:
+                print(error)
+                self.fail("Daily and daily summary reporting tables do not match")
 
             usage_cost_sum, unblended_cost_sum, blended_cost_sum, public_on_demand_cost_sum = 0, 0, 0, 0
             unblended_rate_max, blended_rate_max, public_on_demand_rate_max = 0, 0, 0
@@ -368,14 +394,18 @@ class AWSDailyTest(MasuTestCase):
                     public_on_demand_rate_max = daily_values[counter][8]
                 counter += 1
 
-            self.assertEqual(usage_cost_sum, daily_summary_values[0][3])
-            self.assertEqual(unblended_rate_max, daily_summary_values[0][4])
-            self.assertEqual(unblended_cost_sum, daily_summary_values[0][5])
-            self.assertEqual(blended_rate_max, daily_summary_values[0][6])
-            self.assertEqual(blended_cost_sum, daily_summary_values[0][7])
-            self.assertEqual(public_on_demand_cost_sum, daily_summary_values[0][8])
-            self.assertEqual(public_on_demand_rate_max, daily_summary_values[0][9])
-            print("AWS Daily vs Daily Summary tests have passed!")
+            try:
+                self.assertEqual(usage_cost_sum, daily_summary_values[0][3])
+                self.assertEqual(unblended_rate_max, daily_summary_values[0][4])
+                self.assertEqual(unblended_cost_sum, daily_summary_values[0][5])
+                self.assertEqual(blended_rate_max, daily_summary_values[0][6])
+                self.assertEqual(blended_cost_sum, daily_summary_values[0][7])
+                self.assertEqual(public_on_demand_cost_sum, daily_summary_values[0][8])
+                self.assertEqual(public_on_demand_rate_max, daily_summary_values[0][9])
+                print("AWS Daily vs Daily Summary tests have passed!")
+            except AssertionError as error:
+                print(error)
+                self.fail("Test assertion for " + str(date_val) + " has failed")
 
         print("All AWS Daily vs Daily Summary tests have passed!")
         print("All AWS reporting database tests have passed!")
@@ -384,7 +414,6 @@ class AWSDailyTest(MasuTestCase):
 # test script
 psql = AWSDailyTest()
 psql.setUp()
-# psql.test_daily_to_summary_raw_sql()
 psql.test_line_item_to_daily()
 psql.test_daily_to_summary()
 psql.tearDown()

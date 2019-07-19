@@ -103,6 +103,9 @@ class OCPDailyTest(MasuTestCase):
         # database test between STORAGE raw and daily reporting tables
         count = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['storage_line_item'], "count(*)")[0][0]
 
+        if count == 0:
+            self.fail("OCP Storage line item reporting table is empty")
+
         # ocp storage start datetime field
         report_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report'],
@@ -120,6 +123,9 @@ class OCPDailyTest(MasuTestCase):
              "storageclass", "persistentvolumeclaim_capacity_bytes", "persistentvolumeclaim_capacity_byte_seconds",
              "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
              "persistentvolume_labels", "persistentvolumeclaim_labels"])
+
+        if storage_line_items.count() == 0:
+            self.fail("OCP Storage line item reporting table is empty")
 
         # initialize list of dictionaries to store each unique line item
         storage_list_dict = [{"namespace": storage_line_items[0][0], "pod": storage_line_items[0][1],
@@ -156,21 +162,28 @@ class OCPDailyTest(MasuTestCase):
                      "volume_request_storage_byte_seconds", "persistentvolumeclaim_usage_byte_seconds",
                      "persistentvolume_labels", "persistentvolumeclaim_labels"], curr_date)
 
+                if daily_storage.count() == 0:
+                    self.fail("OCP Storage daily reporting table is empty")
+
                 # print current date of line item
                 print(curr_date)
 
                 # assertion between the total summation of line item values and daily values for the current date
                 while daily_counter < len(storage_list_dict):
-                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_bytes"],
-                                     daily_storage[daily_counter][6])
-                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_byte_seconds"],
-                                     daily_storage[daily_counter][7])
-                    self.assertEqual(storage_list_dict[daily_counter]["volume_request_storage_byte_seconds"],
-                                     daily_storage[daily_counter][8])
-                    self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_usage_byte_seconds"],
-                                     daily_storage[daily_counter][9])
-                    daily_counter += 1
-                    print("OCP Storage Raw vs Daily tests have passed!")
+                    try:
+                        self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_bytes"],
+                                         daily_storage[daily_counter][6])
+                        self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_capacity_byte_seconds"],
+                                         daily_storage[daily_counter][7])
+                        self.assertEqual(storage_list_dict[daily_counter]["volume_request_storage_byte_seconds"],
+                                         daily_storage[daily_counter][8])
+                        self.assertEqual(storage_list_dict[daily_counter]["persistentvolumeclaim_usage_byte_seconds"],
+                                         daily_storage[daily_counter][9])
+                        daily_counter += 1
+                        print("OCP Storage Raw vs Daily tests have passed!")
+                    except AssertionError as error:
+                        print(error)
+                        self.fail("Test assertion for " + str(curr_date) + " has failed")
 
                 # get current date of line item
                 curr_date = report_items[items_counter][0].date()
@@ -265,6 +278,9 @@ class OCPDailyTest(MasuTestCase):
         # database test between USAGE raw and daily reporting tables
         count = self.table_select_raw_sql(OCP_REPORT_TABLE_MAP['line_item'], "count(*)")[0][0]
 
+        if count == 0:
+            self.fail("OCP Usage line item reporting table is empty")
+
         # ocp usage start datetime field
         report_items = self.table_select(
             OCP_REPORT_TABLE_MAP['report'],
@@ -283,6 +299,9 @@ class OCPDailyTest(MasuTestCase):
              "pod_request_memory_byte_seconds", "pod_limit_memory_byte_seconds",
              "node_capacity_cpu_core_seconds", "node_capacity_memory_bytes", "node_capacity_cpu_cores",
              "node_capacity_memory_byte_seconds", "pod_labels", "resource_id"])
+
+        if usage_line_items.count() == 0:
+            self.fail("OCP Usage line item reporting table is empty")
 
         # initialize list of dictionaries to store each unique line item
         usage_list_dict = [{"namespace": usage_line_items[0][0], "pod": usage_line_items[0][1],
@@ -328,31 +347,34 @@ class OCPDailyTest(MasuTestCase):
 
                 # assertion between the total summation of line item values and daily values for the current date
                 while daily_counter < len(usage_list_dict):
-                    self.assertEqual(usage_list_dict[daily_counter]["cluster_id"],
-                                     daily_usage[daily_counter][0])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_usage_cpu_core_seconds"],
-                                     daily_usage[daily_counter][4])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_request_cpu_core_seconds"],
-                                     daily_usage[daily_counter][5])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_limit_cpu_core_seconds"],
-                                     daily_usage[daily_counter][6])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_usage_memory_byte_seconds"],
-                                     daily_usage[daily_counter][7])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_request_memory_byte_seconds"],
-                                     daily_usage[daily_counter][8])
-                    self.assertEqual(usage_list_dict[daily_counter]["pod_limit_memory_byte_seconds"],
-                                     daily_usage[daily_counter][9])
-                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_core_seconds"],
-                                     daily_usage[daily_counter][11])
-                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_bytes"],
-                                     daily_usage[daily_counter][12])
-                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_cores"],
-                                     daily_usage[daily_counter][10])
-                    self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_byte_seconds"],
-                                     daily_usage[daily_counter][13])
-
-                    daily_counter += 1
-                    print("OCP Usage Raw vs Daily tests have passed!")
+                    try:
+                        self.assertEqual(usage_list_dict[daily_counter]["cluster_id"],
+                                         daily_usage[daily_counter][0])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_usage_cpu_core_seconds"],
+                                         daily_usage[daily_counter][4])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_request_cpu_core_seconds"],
+                                         daily_usage[daily_counter][5])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_limit_cpu_core_seconds"],
+                                         daily_usage[daily_counter][6])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_usage_memory_byte_seconds"],
+                                         daily_usage[daily_counter][7])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_request_memory_byte_seconds"],
+                                         daily_usage[daily_counter][8])
+                        self.assertEqual(usage_list_dict[daily_counter]["pod_limit_memory_byte_seconds"],
+                                         daily_usage[daily_counter][9])
+                        self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_core_seconds"],
+                                         daily_usage[daily_counter][11])
+                        self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_bytes"],
+                                         daily_usage[daily_counter][12])
+                        self.assertEqual(usage_list_dict[daily_counter]["node_capacity_cpu_cores"],
+                                         daily_usage[daily_counter][10])
+                        self.assertEqual(usage_list_dict[daily_counter]["node_capacity_memory_byte_seconds"],
+                                         daily_usage[daily_counter][13])
+                        daily_counter += 1
+                        print("OCP Usage Raw vs Daily tests have passed!")
+                    except AssertionError as error:
+                        print(error)
+                        self.fail("Test assertion for " + str(curr_date) + " has failed")
 
                 # get current date of line item
                 curr_date = report_items[items_counter][0].date()
@@ -486,6 +508,11 @@ class OCPDailyTest(MasuTestCase):
                  "persistentvolumeclaim_capacity_gigabyte_months", "volume_request_storage_gigabyte_months",
                  "persistentvolumeclaim_usage_gigabyte_months"], date_val)
 
+            if daily_storage.count() == 0:
+                self.fail("OCP Storage daily reporting table is empty")
+            if daily_summary_storage.count() == 0:
+                self.fail("OCP Storage daily summary reporting table is empty")
+
             cap_giga = float(daily_storage[0][2]) * (2 ** (-30))
             cap_giga_months = float(daily_storage[0][3]) / 86400 * \
                               monthrange(parse_date.year, parse_date.month)[1] * (
@@ -498,11 +525,17 @@ class OCPDailyTest(MasuTestCase):
 
             labels = dict(daily_storage[0][0])
             labels.update(daily_storage[0][1])
-            self.assertEqual(labels, daily_summary_storage[0][0])
-            self.assertEqual(cap_giga, daily_summary_storage[0][1])
-            self.assertEqual(cap_giga_months, daily_summary_storage[0][2])
-            self.assertEqual(storage_giga_months, daily_summary_storage[0][3])
-            self.assertEqual(usage_giga_months, daily_summary_storage[0][4])
+
+            try:
+                self.assertEqual(labels, daily_summary_storage[0][0])
+                self.assertEqual(cap_giga, daily_summary_storage[0][1])
+                self.assertEqual(cap_giga_months, daily_summary_storage[0][2])
+                self.assertEqual(storage_giga_months, daily_summary_storage[0][3])
+                self.assertEqual(usage_giga_months, daily_summary_storage[0][4])
+                print("OCP Storage Daily vs Daily Summary tests have passed!")
+            except AssertionError as error:
+                print(error)
+                self.fail("Test assertion for " + str(date_val) + " has failed")
 
             daily_usage = self.table_select_by_date(
                 OCP_REPORT_TABLE_MAP['line_item_daily'],
@@ -523,20 +556,29 @@ class OCPDailyTest(MasuTestCase):
                  "cluster_capacity_memory_gigabyte_hours", "total_capacity_cpu_core_hours",
                  "total_capacity_memory_gigabyte_hours"], date_val)
 
-            self.assertEqual(float(daily_usage[0][0]) / 3600, daily_summary_usage[0][0])
-            self.assertEqual(float(daily_usage[0][1]) / 3600, daily_summary_usage[0][1])
-            self.assertEqual(float(daily_usage[0][2]) / 3600, daily_summary_usage[0][2])
-            self.assertEqual(float(daily_usage[0][3]) / 3600 * (2 ** (-30)), daily_summary_usage[0][3])
-            self.assertEqual(float(daily_usage[0][4]) / 3600 * (2 ** (-30)), daily_summary_usage[0][4])
-            self.assertEqual(float(daily_usage[0][5]) / 3600 * (2 ** (-30)), daily_summary_usage[0][5])
-            self.assertEqual(float(daily_usage[0][6]) / 3600, daily_summary_usage[0][6])
-            self.assertEqual(float(daily_usage[0][7]) * (2 ** (-30)), daily_summary_usage[0][7])
-            self.assertEqual(float(daily_usage[0][8]) / 3600 * (2 ** (-30)), daily_summary_usage[0][8])
-            self.assertEqual(float(daily_usage[0][9]) / 3600, daily_summary_usage[0][9])
-            self.assertEqual(float(daily_usage[0][10]) / 3600 * (2 ** (-30)), daily_summary_usage[0][10])
-            self.assertEqual(float(daily_usage[0][11]) / 3600, daily_summary_usage[0][11])
-            self.assertEqual(float(daily_usage[0][12]) / 3600 * (2 ** (-30)), daily_summary_usage[0][12])
-            print("OCP Daily vs Daily Summary tests have passed!")
+            if daily_usage.count() == 0:
+                self.fail("OCP Usage daily reporting table is empty")
+            if daily_summary_usage.count() == 0:
+                self.fail("OCP Usage daily summary reporting table is empty")
+
+            try:
+                self.assertEqual(float(daily_usage[0][0]) / 3600, daily_summary_usage[0][0])
+                self.assertEqual(float(daily_usage[0][1]) / 3600, daily_summary_usage[0][1])
+                self.assertEqual(float(daily_usage[0][2]) / 3600, daily_summary_usage[0][2])
+                self.assertEqual(float(daily_usage[0][3]) / 3600 * (2 ** (-30)), daily_summary_usage[0][3])
+                self.assertEqual(float(daily_usage[0][4]) / 3600 * (2 ** (-30)), daily_summary_usage[0][4])
+                self.assertEqual(float(daily_usage[0][5]) / 3600 * (2 ** (-30)), daily_summary_usage[0][5])
+                self.assertEqual(float(daily_usage[0][6]) / 3600, daily_summary_usage[0][6])
+                self.assertEqual(float(daily_usage[0][7]) * (2 ** (-30)), daily_summary_usage[0][7])
+                self.assertEqual(float(daily_usage[0][8]) / 3600 * (2 ** (-30)), daily_summary_usage[0][8])
+                self.assertEqual(float(daily_usage[0][9]) / 3600, daily_summary_usage[0][9])
+                self.assertEqual(float(daily_usage[0][10]) / 3600 * (2 ** (-30)), daily_summary_usage[0][10])
+                self.assertEqual(float(daily_usage[0][11]) / 3600, daily_summary_usage[0][11])
+                self.assertEqual(float(daily_usage[0][12]) / 3600 * (2 ** (-30)), daily_summary_usage[0][12])
+                print("OCP Usage Daily vs Daily Summary tests have passed!")
+            except AssertionError as error:
+                print(error)
+                self.fail("Test assertion for " + str(date_val) + " has failed")
 
         print("All OCP Daily vs Daily Summary tests have passed!")
         print("All OCP reporting database tests have passed!")
